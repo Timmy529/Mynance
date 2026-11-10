@@ -80,7 +80,7 @@ test('accounts, expenses and validation', async () => {
   });
   assert.equal(r.status, 201);
   assert.equal(r.data.amount, 1234.5);
-  assert.equal(r.data.payment_method, 'visa'); // stored as given, matched case-insensitively
+  assert.equal(r.data.payment_method, 'Visa'); // matched case-insensitively, stored canonically
   assert.equal(r.data.category, 'Groceries'); // canonicalized
   const id = r.data.id;
 

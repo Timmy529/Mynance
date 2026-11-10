@@ -6,6 +6,7 @@ import { ACCOUNT_TYPES, ACCOUNT_GROUPS, accountTypeInfo, isPaymentMethodAccount 
 import { ACCOUNT_TYPE_OPTIONS } from '../lib/options.js';
 import { api } from '../api.js';
 import { formatDate } from '../lib/dates.js';
+import ImportPanel from './Import.jsx';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -209,7 +210,8 @@ function Accounts() {
     >
       {!accounts.length ? (
         <Empty title="No accounts yet" action={<button className="btn primary" onClick={() => setEditing({})}>Add your first account</button>}>
-          Tip: add a “Home” account for your home's value and a “Mortgage” account for the loan to track home equity.
+          Tip: add a “Home” account for your home's value and a “Mortgage” account for the loan to track home equity. Have your history in a
+          spreadsheet? <a href="#/settings?tab=import">Import it</a> and accounts are created for you.
         </Empty>
       ) : (
         <div className="table-wrap">
@@ -709,6 +711,7 @@ export default function Settings({ params }) {
           { value: 'methods', label: 'Payment methods' },
           { value: 'categories', label: 'Expense categories' },
           { value: 'activity', label: 'Activity categories' },
+          { value: 'import', label: 'Import' },
           { value: 'preferences', label: 'Preferences' },
           { value: 'backup', label: 'Backup & data' },
         ]}
@@ -717,6 +720,7 @@ export default function Settings({ params }) {
       {tab === 'methods' && <PaymentMethods />}
       {tab === 'categories' && <ExpenseCategories />}
       {tab === 'activity' && <ActivityCategories />}
+      {tab === 'import' && <ImportPanel />}
       {tab === 'preferences' && <Preferences />}
       {tab === 'backup' && <Backup />}
     </div>

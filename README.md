@@ -31,7 +31,8 @@ and back them up by copying the folder.
 - **Projections**: net worth and investment projections (low/expected/high), plus a retirement
   burn-down that shows how long your money lasts after you retire.
 - **Settings**: accounts, payment methods, expense categories and subcategories, activity
-  categories, currency, and backup & restore.
+  categories, currency, backup & restore, and **import from a spreadsheet** (Google Sheets,
+  Excel, CSV).
 
 It works on desktop (sidebar) and phones (bottom tab bar, quick-add button, full-screen
 forms), and has light and dark themes.
@@ -57,6 +58,37 @@ docker compose exec -u node mynance node scripts/demo-data.js /data
 ```
 
 (It refuses to overwrite existing data unless you add `--force`.)
+
+### Bringing in your existing spreadsheet
+
+If your history lives in a Google Sheet, even one too big to open in the browser any more:
+
+1. **Get the file out.** Go to [drive.google.com](https://drive.google.com), right-click the
+   spreadsheet, and choose **Download**. Drive converts it to an Excel `.xlsx` with every tab,
+   without opening the sheet. If Drive can't convert it, use
+   `https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=xlsx` (the ID is the long
+   code in the sheet's URL). For a single tab as CSV, use `?format=csv&gid=<TAB_ID>` (the first
+   tab is `gid=0`). As a last resort, Google Takeout exports Sheets as `.xlsx` too.
+2. **Import it.** In Mynance, go to **Settings → Import** and choose the file (`.xlsx`, `.csv`
+   or `.tsv`). Mynance then:
+   - reads every tab and guesses what each one holds: expenses, account activity, balances
+     (one row per account, or one column per account as in a "Net Worth" tab), paychecks, or
+     salary history;
+   - matches columns by header name ("Merchant", "Paid With", "Gross Pay", "OASDI", …) and
+     finds the header row even under a title line;
+   - reads dates like `1/5/2024`, `Jan 5, 2024` and `5-Jan-24`, real spreadsheet dates, and
+     amounts like `$1,234.56`, `(12.50)` and `1.234,56`. Bank exports that show spending as
+     negative numbers are flipped automatically;
+   - lists accounts, payment methods and categories you don't have yet. You choose to create
+     each one (account types are guessed from names like "Visa" or "Roth IRA") or point it
+     at one you already have, e.g. "Car" → "Vehicle".
+3. **Check, then import.** *Check first* shows exactly what will be added. A backup is saved
+   before anything is written. If any row is invalid, nothing is imported. Rows already in
+   Mynance (same date, amount and vendor) are skipped, so you can safely import the same
+   file again, or a newer copy of it later. Your mapping choices are remembered for next time.
+
+Tested with a 120,000-row workbook: about 3 seconds to read and map, and about 3 seconds to
+import.
 
 ### Configuration
 
@@ -141,7 +173,7 @@ Conventions:
 | Core spending | All expenses except categories marked *not core* (Tithe, Charity and Vehicle by default). |
 | Daily / monthly averages | Totals over the window ÷ days (or days ÷ 30.44). The window starts no earlier than your first record. |
 | Months of operating cash | Cash accounts ÷ average monthly spending (all categories). |
-| Credit cards owed | Latest recorded balance + expenses charged since then − payments recorded since then. |
+| Credit cards owed | Latest recorded balance + expenses charged since then − payments recorded since then. New charges are only added while the recorded balance is recent (45 days); cards with no recorded balance aren't estimated. |
 | Monthly % gain | (end value − start value − contributions) ÷ (start value + contributions ÷ 2). Contributions come from changes in *contributed*, or from account activity when that isn't recorded. |
 | Annualized return | Monthly gains chained together and annualized (time-weighted, so deposits don't count as growth). |
 | Salary vs investments | Investments ÷ current salary (or the last 12 months of gross pay when there's no salary entry). |
@@ -173,9 +205,9 @@ npm run build            # production build of the web app into client/dist
 Project layout:
 
 ```
-server/   Express API and file storage (CSV/JSON, atomic writes, backups)
+server/   Express API and file storage (CSV/JSON, atomic writes, backups, xlsx/csv import)
 client/   React + Vite web app (Recharts for charts)
-  src/lib/       pure finance calculations (unit tested)
+  src/lib/       pure finance calculations and import mapping (unit tested)
   src/pages/     one file per screen
 shared/   account type definitions used by both
 scripts/  demo data generator

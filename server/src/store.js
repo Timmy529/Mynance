@@ -40,6 +40,71 @@ function sortByDate(records) {
     .map(([r]) => r);
 }
 
+const PAYCHECK_DEDUCTIONS = [
+  'federal_tax', 'state_tax', 'social_security', 'medicare', 'other_tax',
+  'retirement_401k', 'roth_401k', 'hsa', 'medical', 'dental', 'vision', 'other_deductions',
+];
+
+// Lookups (lower-case name -> canonical) for validating references in records.
+export function refContext(accounts, paymentMethods, categories) {
+  const byName = (list) => new Map(list.map((x) => [lower(x.name), x]));
+  return {
+    accounts: byName(accounts),
+    methods: new Map([...accounts, ...paymentMethods].map((x) => [lower(x.name), x.name])),
+    expense: byName(categories.expense),
+    activity: byName(categories.activity),
+  };
+}
+
+// Validate references and canonicalize names in place. Returns a list of errors.
+export function checkRefs(name, rec, ctx) {
+  const errors = [];
+  if (name === 'expenses') {
+    const method = ctx.methods.get(lower(rec.payment_method));
+    if (rec.payment_method && !method) errors.push(`Unknown payment method "${rec.payment_method}"`);
+    else if (method) rec.payment_method = method;
+    const cat = ctx.expense.get(lower(rec.category));
+    if (rec.category && !cat) errors.push(`Unknown category "${rec.category}"`);
+    if (cat) {
+      rec.category = cat.name;
+      if (cat.subcategories.length > 0) {
+        const sub = cat.subcategories.find((s) => lower(s) === lower(rec.subcategory));
+        if (!rec.subcategory) errors.push(`subcategory is required for ${cat.name}`);
+        else if (!sub) errors.push(`Unknown subcategory "${rec.subcategory}" for ${cat.name}`);
+        else rec.subcategory = sub;
+      }
+    }
+  }
+  if (name === 'activity' || name === 'balances') {
+    const acc = ctx.accounts.get(lower(rec.account));
+    if (!acc) errors.push(`Unknown account "${rec.account}"`);
+    else rec.account = acc.name;
+  }
+  if (name === 'activity') {
+    const cat = ctx.activity.get(lower(rec.category));
+    if (!cat) errors.push(`Unknown activity category "${rec.category}"`);
+    else rec.category = cat.name;
+  }
+  if (name === 'paychecks' && rec.net === null) {
+    const deductions = PAYCHECK_DEDUCTIONS.reduce((sum, k) => sum + (rec[k] || 0), 0);
+    rec.net = Math.round(((rec.gross || 0) + (rec.bonus || 0) - deductions) * 100) / 100;
+  }
+  return errors;
+}
+
+const money2 = (n) => (n === null || n === undefined ? '' : Number(n).toFixed(2));
+
+// Keys that identify "the same" record when importing the same data twice. They
+// leave out names the importer lets you re-map (category, payment method), so
+// mapping differently on a second import can't create duplicates.
+export const DEDUPE_KEYS = {
+  expenses: (r) => `${r.date}|${money2(r.amount)}|${lower(r.vendor)}`,
+  activity: (r) => `${r.date}|${money2(r.amount)}|${lower(r.account)}`,
+  balances: (r) => `${r.date}|${lower(r.account)}`,
+  paychecks: (r) => `${r.date}|${money2(r.gross)}|${money2(r.net)}`,
+  salary: (r) => `${r.date}|${lower(r.employer)}|${money2(r.salary)}`,
+};
+
 export class Store {
   constructor(dataDir) {
     this.dataDir = path.resolve(dataDir);
@@ -217,51 +282,17 @@ export class Store {
     });
   }
 
-  // Check references (accounts, categories, payment methods) against config.
+  async refContext() {
+    const [accounts, paymentMethods, categories] = await Promise.all([
+      this.readConfig('accounts'),
+      this.readConfig('paymentMethods'),
+      this.readConfig('categories'),
+    ]);
+    return refContext(accounts, paymentMethods, categories);
+  }
+
   async validateRefs(name, rec) {
-    const errors = [];
-    if (name === 'expenses') {
-      const [accounts, pms, cats] = await Promise.all([
-        this.readConfig('accounts'),
-        this.readConfig('paymentMethods'),
-        this.readConfig('categories'),
-      ]);
-      const methods = new Set([...accounts, ...pms].map((x) => lower(x.name)));
-      if (rec.payment_method && !methods.has(lower(rec.payment_method))) {
-        errors.push(`Unknown payment method "${rec.payment_method}"`);
-      }
-      const cat = cats.expense.find((c) => lower(c.name) === lower(rec.category));
-      if (rec.category && !cat) errors.push(`Unknown category "${rec.category}"`);
-      if (cat) {
-        rec.category = cat.name;
-        if (cat.subcategories.length > 0) {
-          const sub = cat.subcategories.find((s) => lower(s) === lower(rec.subcategory));
-          if (!rec.subcategory) errors.push(`subcategory is required for ${cat.name}`);
-          else if (!sub) errors.push(`Unknown subcategory "${rec.subcategory}" for ${cat.name}`);
-          else rec.subcategory = sub;
-        }
-      }
-    }
-    if (name === 'activity' || name === 'balances') {
-      const accounts = await this.readConfig('accounts');
-      const acc = accounts.find((a) => lower(a.name) === lower(rec.account));
-      if (!acc) errors.push(`Unknown account "${rec.account}"`);
-      else rec.account = acc.name;
-    }
-    if (name === 'activity') {
-      const cats = await this.readConfig('categories');
-      const cat = cats.activity.find((c) => lower(c.name) === lower(rec.category));
-      if (!cat) errors.push(`Unknown activity category "${rec.category}"`);
-      else rec.category = cat.name;
-    }
-    if (name === 'paychecks' && rec.net === null) {
-      const deductions = [
-        'federal_tax', 'state_tax', 'social_security', 'medicare', 'other_tax',
-        'retirement_401k', 'roth_401k', 'hsa', 'medical', 'dental', 'vision', 'other_deductions',
-      ].reduce((sum, k) => sum + (rec[k] || 0), 0);
-      rec.net = Math.round(((rec.gross || 0) + (rec.bonus || 0) - deductions) * 100) / 100;
-    }
-    return errors;
+    return checkRefs(name, rec, await this.refContext());
   }
 
   async prepare(name, input) {
@@ -460,6 +491,131 @@ export class Store {
       }
       for (const [name, value] of configChanges) await this.writeConfig(name, value);
       return { changed };
+    });
+  }
+
+  // Bulk import from a spreadsheet. `create` adds accounts, payment methods and
+  // categories the records need; `records` maps collection -> list of rows.
+  // Everything is validated before anything is written, so a bad import changes
+  // nothing. Rows matching existing records are skipped when skipDuplicates is set
+  // (counted as a multiset, so two identical coffees on the same day both import
+  // the first time and both skip the second time). dryRun reports without writing.
+  importData({ create = {}, records = {}, skipDuplicates = true, dryRun = false } = {}) {
+    return this.lock(async () => {
+      const same = (a, b) => lower(a) === lower(b);
+      const config = await this.readAllConfig();
+
+      const accounts = config.accounts.slice();
+      for (const a of create.accounts || []) {
+        if (!accounts.some((x) => same(x.name, a.name))) accounts.push(a);
+      }
+      const paymentMethods = config.paymentMethods.slice();
+      for (const p of create.paymentMethods || []) {
+        if (!paymentMethods.some((x) => same(x.name, p.name)) && !accounts.some((x) => same(x.name, p.name))) {
+          paymentMethods.push({ name: p.name });
+        }
+      }
+      const expense = config.categories.expense.map((c) => ({ ...c, subcategories: [...c.subcategories] }));
+      for (const c of create.expenseCategories || []) {
+        let cat = expense.find((x) => same(x.name, c.name));
+        if (!cat) {
+          cat = { name: c.name, subcategories: [], excludeFromCore: !!c.excludeFromCore };
+          expense.push(cat);
+        }
+        for (const s of c.subcategories || []) if (s && !cat.subcategories.some((x) => same(x, s))) cat.subcategories.push(s);
+      }
+      const activity = config.categories.activity.slice();
+      for (const c of create.activityCategories || []) {
+        if (!activity.some((x) => same(x.name, c.name))) activity.push({ name: c.name, countsAsIncome: !!c.countsAsIncome });
+      }
+
+      const vAccounts = VALIDATORS.accounts(accounts);
+      const vMethods = vAccounts.errors.length ? { errors: [] } : VALIDATORS.paymentMethods(paymentMethods, vAccounts.value);
+      const vCats = VALIDATORS.categories({ expense, activity });
+      const configErrors = [...vAccounts.errors, ...vMethods.errors, ...vCats.errors];
+      if (configErrors.length) throw new HttpError(400, `Nothing was imported: ${configErrors[0]}`, configErrors);
+
+      const ctx = refContext(vAccounts.value, vMethods.value, vCats.value);
+      const prepared = {};
+      const errors = [];
+      for (const [name, list] of Object.entries(records)) {
+        if (!COLLECTIONS[name]) throw new HttpError(400, `Unknown collection "${name}"`);
+        if (!Array.isArray(list)) throw new HttpError(400, `${name} must be a list`);
+        prepared[name] = [];
+        list.forEach((input, i) => {
+          const { record, errors: errs } = normalizeInput(name, input);
+          if (!errs.length) errs.push(...checkRefs(name, record, ctx));
+          if (errs.length) {
+            if (errors.length < 25) errors.push(`${COLLECTIONS[name].label} ${input?._source || `#${i + 1}`}: ${errs[0]}`);
+            return;
+          }
+          prepared[name].push(record);
+        });
+      }
+      if (errors.length) throw new HttpError(400, `Nothing was imported: ${errors[0]}`, errors);
+
+      const added = {};
+      const skipped = {};
+      const writes = [];
+      for (const [name, list] of Object.entries(prepared)) {
+        const existing = await this.readRecords(name);
+        const key = DEDUPE_KEYS[name];
+        const next = existing.slice();
+        let add = 0;
+        let skip = 0;
+        if (name === 'balances') {
+          // One balance per account per day: the last row in the import wins.
+          const latest = new Map();
+          for (const r of list) latest.set(key(r), r);
+          skip += list.length - latest.size;
+          const at = new Map(existing.map((r, i) => [key(r), i]));
+          for (const [k, r] of latest) {
+            if (at.has(k)) {
+              if (skipDuplicates) {
+                skip++;
+                continue;
+              }
+              r.id = next[at.get(k)].id;
+              next[at.get(k)] = r;
+            } else {
+              r.id = newId();
+              next.push(r);
+            }
+            add++;
+          }
+        } else {
+          const counts = new Map();
+          if (skipDuplicates) for (const r of existing) counts.set(key(r), (counts.get(key(r)) || 0) + 1);
+          for (const r of list) {
+            const k = key(r);
+            if (counts.get(k) > 0) {
+              counts.set(k, counts.get(k) - 1);
+              skip++;
+              continue;
+            }
+            r.id = newId();
+            next.push(r);
+            add++;
+          }
+        }
+        added[name] = add;
+        skipped[name] = skip;
+        if (add) writes.push([name, next]);
+      }
+
+      const created = {
+        accounts: vAccounts.value.length - config.accounts.length,
+        paymentMethods: vMethods.value.length - config.paymentMethods.length,
+        expenseCategories: vCats.value.expense.length - config.categories.expense.length,
+        activityCategories: vCats.value.activity.length - config.categories.activity.length,
+      };
+      if (!dryRun) {
+        if (created.accounts) await this.writeConfig('accounts', vAccounts.value);
+        if (created.paymentMethods) await this.writeConfig('paymentMethods', vMethods.value);
+        if (JSON.stringify(vCats.value) !== JSON.stringify(config.categories)) await this.writeConfig('categories', vCats.value);
+        for (const [name, next] of writes) await this.writeRecords(name, next);
+      }
+      return { dryRun, added, skipped, created };
     });
   }
 

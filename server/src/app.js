@@ -6,6 +6,7 @@ import { HttpError } from './store.js';
 import { COLLECTIONS, columnsOf, toRow } from './schema.js';
 import { toTable } from './csv.js';
 import { CONFIG_NAMES } from './configSchema.js';
+import { readSpreadsheet } from './spreadsheet.js';
 
 const VERSION = '1.0.0';
 
@@ -35,6 +36,21 @@ export function createApp({ store, backups, staticDir, auth } = {}) {
   if (auth?.username && auth?.password) app.use(basicAuth(auth.username, auth.password));
 
   const api = express.Router();
+
+  // ----- import (registered before the default JSON parser: bigger bodies) -----
+  api.post('/import/parse', express.raw({ type: () => true, limit: '200mb' }), async (req, res) => {
+    const sheets = readSpreadsheet(req.body, String(req.query.filename || ''));
+    res.json({ sheets });
+  });
+
+  api.post('/import', express.json({ limit: '200mb' }), async (req, res) => {
+    const body = req.body || {};
+    if (body.dryRun) return res.json(await store.importData(body));
+    await store.importData({ ...body, dryRun: true }); // validate before taking a backup
+    const backup = await backups.create('before-import');
+    res.json({ ...(await store.importData(body)), backup: backup?.name });
+  });
+
   api.use(express.json({ limit: '10mb' }));
 
   api.get('/health', (req, res) => res.json({ ok: true, version: VERSION }));

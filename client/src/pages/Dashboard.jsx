@@ -14,6 +14,7 @@ const lower = (s) => String(s ?? '').toLowerCase();
 function Onboarding({ data }) {
   const { config, records } = data;
   const steps = [
+    { done: records.expenses.length + records.balances.length > 0, label: 'Have your history in a spreadsheet (e.g. Google Sheets)? Import it', href: '#/settings?tab=import' },
     { done: config.accounts.length > 0, label: 'Add your accounts (checking, credit cards, investments, home…)', href: '#/settings?tab=accounts' },
     { done: records.balances.length > 0, label: 'Record today’s balances', href: '#/balances' },
     { done: records.expenses.length > 0, label: 'Log an expense', href: '#/expenses' },
@@ -40,19 +41,22 @@ function Onboarding({ data }) {
 }
 
 // Credit card owed = last recorded balance + charges since then - payments since then.
-function creditCardOutstanding(data, core) {
+// Charges are only added while the recorded balance is recent (about one statement
+// cycle); after that the balance is shown as recorded, since payments made outside
+// Mynance would otherwise be missed. Cards with no recorded balance aren't estimated.
+const CARD_ESTIMATE_DAYS = 45;
+function creditCardOutstanding(data, core, today) {
   const cards = data.config.accounts.filter((a) => a.type === 'credit_card' && !a.archived);
   return cards.map((card) => {
     const row = core.current.rows.find((r) => r.account === card);
     const asOf = row?.asOf || null;
-    const recorded = row?.value || 0;
-    const charges = data.records.expenses
-      .filter((e) => lower(e.payment_method) === lower(card.name) && (!asOf || e.date > asOf))
-      .reduce((s, e) => s + (e.amount || 0), 0);
-    const payments = data.records.activity
-      .filter((a) => lower(a.account) === lower(card.name) && (!asOf || a.date > asOf))
-      .reduce((s, a) => s + (a.amount || 0), 0);
-    return { card, asOf, recorded, charges, payments, owed: Math.max(0, recorded + charges - payments) };
+    if (!asOf) return { card, asOf, recorded: 0, charges: 0, payments: 0, owed: 0, status: 'none' };
+    const recent = daysBetween(asOf, today) <= CARD_ESTIMATE_DAYS;
+    const after = (r, key) => lower(r[key]) === lower(card.name) && r.date > asOf && r.date <= today;
+    const charges = recent ? data.records.expenses.filter((e) => after(e, 'payment_method')).reduce((s, e) => s + (e.amount || 0), 0) : 0;
+    const payments = recent ? data.records.activity.filter((a) => after(a, 'account')).reduce((s, a) => s + (a.amount || 0), 0) : 0;
+    const recorded = row.value || 0;
+    return { card, asOf, recorded, charges, payments, owed: Math.max(0, recorded + charges - payments), status: recent ? 'estimated' : 'stale' };
   });
 }
 
@@ -71,7 +75,7 @@ export default function Dashboard() {
   const avg = useMemo(() => averages(ledger(data), win.start, win.end, { exclude: excluded }), [data, win.start, win.end, excluded]);
   const eoy = useMemo(() => endOfYearNetWorth(core, inputs, today), [core, inputs, today]);
   const salary = useMemo(() => salaryNow(data, today), [data, today]);
-  const cards = useMemo(() => creditCardOutstanding(data, core), [data, core]);
+  const cards = useMemo(() => creditCardOutstanding(data, core, today), [data, core, today]);
   const cardTotal = cards.reduce((s, c) => s + c.owed, 0);
 
   const prev = core.series.length >= 2 ? core.series[core.series.length - 2] : null;
@@ -163,7 +167,15 @@ export default function Dashboard() {
         <Stat
           label="Credit cards owed"
           value={dollars(cardTotal)}
-          sub={!cards.length ? 'No credit cards yet' : cards.some((c) => c.charges) ? `incl. ${dollars(cards.reduce((s, c) => s + c.charges, 0))} charged since last balance` : `${cards.length} card${cards.length > 1 ? 's' : ''}, unpaid balance`}
+          sub={
+            !cards.length
+              ? 'No credit cards yet'
+              : cards.some((c) => c.status === 'none')
+                ? `${cards.filter((c) => c.status === 'none').length} card${cards.filter((c) => c.status === 'none').length > 1 ? 's have' : ' has'} no balance recorded`
+                : cards.some((c) => c.charges)
+                  ? `incl. ${dollars(cards.reduce((s, c) => s + c.charges, 0))} charged since last balance`
+                  : `${cards.length} card${cards.length > 1 ? 's' : ''}, unpaid balance`
+          }
           onClick={() => (window.location.hash = '/balances')}
         />
         <Stat label="Months of cash" value={monthsOfCash !== null ? monthsOfCash.toFixed(1) : '—'} sub={avg.spending.monthlyAll ? `Cash ÷ ${dollars(avg.spending.monthlyAll)}/mo spend` : 'Needs spending history'} />
