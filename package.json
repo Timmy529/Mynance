@@ -1,0 +1,17 @@
+{
+  "name": "mynance",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted personal finance tracker with human-readable CSV/JSON storage",
+  "scripts": {
+    "setup": "npm ci --prefix server && npm ci --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "test": "npm test --prefix server && npm test --prefix client",
+    "demo-data": "node scripts/demo-data.js ./demo-data",
+    "start:demo": "DATA_DIR=\"$PWD/demo-data\" npm start --prefix server"
+  }
+}
