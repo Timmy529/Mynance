@@ -5,14 +5,14 @@ services:
     container_name: mynance
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8081:8080"
     volumes:
       # All data (plain CSV + JSON) and automatic backups live here on the host.
       - ./data:/data
     environment:
       # Owner of the files written to ./data (match your host user: `id -u` / `id -g`)
-      PUID: "1000"
-      PGID: "1000"
+      # PUID: "1000"
+      # PGID: "1000"
       TZ: "UTC"  # your timezone, e.g. America/New_York (used for backup timestamps)
       # Automatic backups: snapshot every N hours when data changed, keep the newest N.
       BACKUP_INTERVAL_HOURS: "24"

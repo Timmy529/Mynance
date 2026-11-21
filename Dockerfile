@@ -16,9 +16,9 @@ FROM ${NODE_IMAGE}
 ENV NODE_ENV=production \
     PORT=8080 \
     DATA_DIR=/data \
-    STATIC_DIR=/app/public \
-    PUID=1000 \
-    PGID=1000
+    STATIC_DIR=/app/public
+    # PUID=1000 \
+    # PGID=1000
 WORKDIR /app
 COPY server/package.json server/package-lock.json ./server/
 RUN cd server && npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
