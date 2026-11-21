@@ -107,6 +107,29 @@ describe('income & spending', () => {
     expect(t.net).toBe(2800);
   });
 
+  it('adds reimbursements to take-home pay without counting them as income', () => {
+    const reimbursed = {
+      ...paychecks[1],
+      reimbursements: 250,
+      net: null,
+    };
+    const totals = paycheckTotals(reimbursed);
+    expect(totals.gross).toBe(4000);
+    expect(totals.reimbursements).toBe(250);
+    expect(totals.computedNet).toBe(3050);
+    expect(totals.net).toBe(3050);
+
+    const dataWithReimbursement = { ...data, paychecks: [reimbursed] };
+    const [month] = monthlyCashflow(dataWithReimbursement, '2026-02', '2026-02');
+    expect(month.net).toBe(3050);
+    expect(month.income).toBe(2800);
+
+    const avg = averages(dataWithReimbursement, '2026-02-01', '2026-02-28');
+    expect(avg.income.net).toBe(2800);
+    expect(avg.income.gross).toBe(4000);
+    expect(avg.income.total).toBe(2800);
+  });
+
   it('computes monthly cashflow and savings rate', () => {
     const [jan, feb] = monthlyCashflow(data, '2026-01', '2026-02');
     expect(jan.expenses).toBe(150);

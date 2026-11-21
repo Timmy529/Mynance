@@ -94,7 +94,7 @@ edit it in a spreadsheet or text editor, track it in git, or back it up by copyi
       expenses.csv           date,amount,vendor,payment_method,category,subcategory,notes,id
       account-activity.csv   date,amount,account,category,notes,id
       balances.csv           date,account,balance,contributed,notes,id
-      paychecks.csv          date,employer,gross,bonus,taxes...,deductions...,net,...,id
+      paychecks.csv          date,employer,gross,bonus,reimbursements,taxes...,deductions...,net,...,id
       salary.csv             date,employer,title,salary,notes,id
     backups/                 Automatic zip snapshots (can be changed with BACKUP_DIR)
 

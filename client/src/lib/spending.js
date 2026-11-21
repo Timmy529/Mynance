@@ -13,9 +13,10 @@ export function paycheckTotals(p) {
   const taxes = PAYCHECK_TAX_KEYS.reduce((s, k) => s + v(k), 0);
   const retirement = PAYCHECK_RETIREMENT_KEYS.reduce((s, k) => s + v(k), 0);
   const benefits = PAYCHECK_BENEFIT_KEYS.reduce((s, k) => s + v(k), 0);
-  const computedNet = gross - taxes - retirement - benefits;
+  const reimbursements = v('reimbursements');
+  const computedNet = gross - taxes - retirement - benefits + reimbursements;
   const net = p.net === null || p.net === undefined ? computedNet : p.net;
-  return { gross, taxes, retirement, benefits, net, computedNet, difference: net - computedNet, match: v('employer_match') };
+  return { gross, taxes, retirement, benefits, reimbursements, net, computedNet, difference: net - computedNet, match: v('employer_match') };
 }
 
 export function inRange(records, start, end) {
@@ -67,6 +68,7 @@ export function monthlyCashflow({ expenses, paychecks, activity, categories }, s
     const t = paycheckTotals(p);
     row.net += t.net;
     row.gross += t.gross;
+    row.reimbursements = (row.reimbursements || 0) + t.reimbursements;
     row.retirement += t.retirement;
   }
   for (const a of otherIncome(activity, categories)) {
@@ -75,7 +77,7 @@ export function monthlyCashflow({ expenses, paychecks, activity, categories }, s
   }
   return months.map((k) => {
     const r = rows.get(k);
-    const income = r.net + r.other;
+    const income = r.net - (r.reimbursements || 0) + r.other;
     const saved = income + r.retirement - r.expenses;
     const base = income + r.retirement;
     return { ...r, income, saved, savingsRate: base > 0 ? saved / base : null };
@@ -108,7 +110,7 @@ export function averages({ expenses, paychecks, activity, categories }, start, e
   let retirement = 0;
   for (const p of pays) {
     const t = paycheckTotals(p);
-    net += t.net;
+    net += t.net - t.reimbursements;
     gross += t.gross;
     retirement += t.retirement;
   }

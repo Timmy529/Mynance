@@ -49,6 +49,7 @@ export const COLLECTIONS = {
       text('employer'),
       money('gross', { required: true }),
       money('bonus'),
+      money('reimbursements'),
       money('federal_tax'),
       money('state_tax'),
       money('social_security'),
