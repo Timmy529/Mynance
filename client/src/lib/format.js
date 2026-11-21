@@ -1,5 +1,23 @@
 let currency = 'USD';
 let locale = 'en-US';
+let privacyEnabled = false;
+let publicExpensesView = false;
+
+// Privacy mode masks formatted financial values throughout the app, except on Expenses.
+export function setPrivacyView(enabled, page) {
+  privacyEnabled = Boolean(enabled);
+  publicExpensesView = page === 'expenses';
+}
+
+function isMasked() {
+  return privacyEnabled && !publicExpensesView;
+}
+
+export function privacyText(value) {
+  return isMasked() ? MASK : value;
+}
+
+const MASK = '••••••';
 const cache = new Map();
 
 export function setLocale(next = {}) {
@@ -24,12 +42,14 @@ const fix = (n) => (Object.is(n, -0) || Math.abs(n) < 0.005 ? 0 : n);
 
 // $1,234.56
 export function money(n) {
+  if (isMasked()) return MASK;
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return fmt('money', () => ({ style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })).format(fix(n));
 }
 
 // $1,235 (nearest dollar)
 export function dollars(n) {
+  if (isMasked()) return MASK;
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return fmt('dollars', () => ({ style: 'currency', currency, maximumFractionDigits: 0, minimumFractionDigits: 0 })).format(
     fix(Math.round(n)),
@@ -38,23 +58,27 @@ export function dollars(n) {
 
 // $1.2K / $3.4M
 export function compactMoney(n) {
+  if (isMasked()) return MASK;
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   if (Math.abs(n) < 10000) return dollars(n);
   return fmt('compact', () => ({ style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 })).format(n);
 }
 
 export function pct(x, digits = 1) {
+  if (isMasked()) return MASK;
   if (x === null || x === undefined || !Number.isFinite(x)) return '—';
   return `${(x * 100).toFixed(digits)}%`;
 }
 
 export function signedPct(x, digits = 1) {
+  if (isMasked()) return MASK;
   if (x === null || x === undefined || !Number.isFinite(x)) return '—';
   const s = (x * 100).toFixed(digits);
   return x > 0 ? `+${s}%` : `${s}%`;
 }
 
 export function signedDollars(n) {
+  if (isMasked()) return MASK;
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return n > 0 ? `+${dollars(n)}` : dollars(n);
 }
@@ -66,6 +90,7 @@ export function num(n, digits = 1) {
 
 // Axis ticks: full under 10K, compact above.
 export function axisMoney(n) {
+  if (isMasked()) return MASK;
   const a = Math.abs(n);
   if (a >= 1e6) return `${n < 0 ? '-' : ''}$${+(a / 1e6).toFixed(1)}M`;
   if (a >= 1e4) return `${n < 0 ? '-' : ''}$${+(a / 1e3).toFixed(0)}K`;

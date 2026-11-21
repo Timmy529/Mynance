@@ -5,7 +5,7 @@ import { Card, Stat, Empty } from '../components/ui.jsx';
 import { ChartCard, TimeChart, BarsChart, Donut } from '../components/charts.jsx';
 import { computeCore, projectionInputs, netWorthProjection, endOfYearNetWorth, salaryNow, cashflowSeries, windowFor, ledger } from '../lib/metrics.js';
 import { averages, excludedCoreSet } from '../lib/spending.js';
-import { dollars, pct, signedDollars, money } from '../lib/format.js';
+import { dollars, pct, signedDollars, money, privacyText } from '../lib/format.js';
 import { monthLabel, monthLabelLong, formatDate, daysBetween } from '../lib/dates.js';
 import { ACCOUNT_GROUPS } from '@shared/accountTypes.js';
 
@@ -182,7 +182,7 @@ export default function Dashboard() {
         <Stat label={`Net worth, Dec 31 ${today.slice(0, 4)} (est.)`} value={dollars(eoy)} sub={`${signedDollars(eoy - t.netWorth)} from today`} />
         <Stat
           label="Salary vs investments"
-          value={salary.amount ? `${(t.investments / salary.amount).toFixed(1)}×` : '—'}
+          value={salary.amount ? privacyText(`${(t.investments / salary.amount).toFixed(1)}×`) : '—'}
           sub={salary.amount ? `Investments ÷ ${dollars(salary.amount)} ${salary.source === 'paychecks' ? 'pay (12 mo)' : 'salary'}` : 'Add salary on the Income page'}
         />
       </div>

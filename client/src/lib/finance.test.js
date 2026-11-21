@@ -263,3 +263,18 @@ describe('projections', () => {
     expect(rich.atRetirement).toBeGreaterThan(1e6);
   });
 });
+
+describe('privacy formatting', () => {
+  it('masks financial values outside the Expenses page and restores them on Expenses', async () => {
+    const { setPrivacyView, money, dollars, pct, axisMoney } = await import('./format.js');
+    setPrivacyView(true, 'dashboard');
+    expect(dollars(123456)).toBe('••••••');
+    expect(money(123.45)).toBe('••••••');
+    expect(pct(0.25)).toBe('••••••');
+    expect(axisMoney(100000)).toBe('••••••');
+    setPrivacyView(true, 'expenses');
+    expect(dollars(123456)).not.toBe('••••••');
+    setPrivacyView(false, 'dashboard');
+    expect(dollars(123456)).not.toBe('••••••');
+  });
+});

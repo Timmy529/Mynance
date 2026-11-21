@@ -5,7 +5,7 @@ import { ChartCard, BarsChart, TimeChart, Donut, RankedBars, colorMap, NEUTRAL }
 import { computeCore, ledger } from '../lib/metrics.js';
 import { expenseBreakdown, averages, monthlyCashflow } from '../lib/spending.js';
 import { monthlySnapshots, monthlyInvestmentReturns, annualizeReturns, cumulativeReturn, buildBalanceIndex, snapshot, balanceHistoryStart } from '../lib/balances.js';
-import { dollars, money, pct, signedPct, signedDollars } from '../lib/format.js';
+import { dollars, money, pct, signedPct, signedDollars, privacyText } from '../lib/format.js';
 import { monthKey, monthLabel, monthLabelLong, addMonthKey } from '../lib/dates.js';
 import { categoryOrder } from '../lib/options.js';
 import { isInvestmentType, accountTypeInfo } from '@shared/accountTypes.js';
@@ -265,7 +265,7 @@ function Investments({ start, end }) {
             xKey="month"
             xFormat={(k) => monthLabel(k)}
             labelFormat={monthLabelLong}
-            yFormat={(v) => `${(v * 100).toFixed(0)}%`}
+            yFormat={(v) => privacyText(`${(v * 100).toFixed(0)}%`)}
             valueFormat={(v) => signedPct(v, 2)}
             zeroLine
             series={[{ key: 'return', label: 'Gain', color: 'var(--s1)' }]}

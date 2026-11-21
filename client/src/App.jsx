@@ -3,6 +3,7 @@ import { useData, useRoute, usePref } from './store.jsx';
 import { Modal } from './components/ui.jsx';
 import { ExpenseForm, ActivityForm, PaycheckForm, SalaryForm } from './components/forms.jsx';
 import * as Icons from './components/icons.jsx';
+import { setPrivacyView } from './lib/format.js';
 import Dashboard from './pages/Dashboard.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Activity from './pages/Activity.jsx';
@@ -37,6 +38,15 @@ const FORMS = {
 const FormContext = createContext(() => {});
 export const useForms = () => useContext(FormContext);
 
+function PrivacyToggle({ compact = false, privacyMode, setPrivacyMode }) {
+  return (
+    <button className={`btn ${compact ? 'ghost sm' : 'ghost sm'}`} onClick={() => setPrivacyMode((v) => !v)} aria-pressed={privacyMode} title={privacyMode ? 'Turn privacy mode off' : 'Turn privacy mode on'} style={compact ? { width: '100%', justifyContent: 'flex-start' } : undefined}>
+      {privacyMode ? <Icons.IconEyeOff /> : <Icons.IconEye />}
+      {privacyMode ? 'Privacy on' : 'Privacy off'}
+    </button>
+  );
+}
+
 function ThemeToggle() {
   const [theme, setTheme] = usePref('theme', 'system');
   useEffect(() => {
@@ -52,11 +62,17 @@ function ThemeToggle() {
   );
 }
 
+function currentPageId(page) {
+  return PAGES.some((p) => p.id === page) ? page : 'dashboard';
+}
+
 export default function App() {
   const { data, error, reload } = useData();
   const { page, params } = useRoute();
   const [form, setForm] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [privacyMode, setPrivacyMode] = usePref('privacyMode', false);
+  setPrivacyView(privacyMode, currentPageId(page));
   const openForm = useCallback((kind, initial) => setForm({ kind, initial }), []);
   const closeForm = useCallback(() => setForm(null), []);
 
@@ -93,6 +109,7 @@ export default function App() {
             </a>
           ))}
           <div className="sidebar-foot">
+            <PrivacyToggle compact privacyMode={privacyMode} setPrivacyMode={setPrivacyMode} />
             <ThemeToggle />
           </div>
         </nav>
@@ -101,6 +118,7 @@ export default function App() {
           <header className="topbar">
             <span className="brand-mark mobile-brand">M</span>
             <h1>{current.label}</h1>
+            <PrivacyToggle privacyMode={privacyMode} setPrivacyMode={setPrivacyMode} />
             <button className="btn primary hide-mobile" onClick={() => openForm('expense')}>
               <Icons.IconPlus /> Expense
             </button>
@@ -140,6 +158,8 @@ export default function App() {
               ))}
             </div>
             <div style={{ marginTop: 16 }}>
+              <PrivacyToggle compact privacyMode={privacyMode} setPrivacyMode={setPrivacyMode} />
+              <div style={{ height: 8 }} />
               <ThemeToggle />
             </div>
           </Modal>
