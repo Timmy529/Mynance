@@ -31,9 +31,10 @@ export default function Activity() {
     [data.records.activity, start, end, account, category],
   );
 
-  const moneyIn = filtered.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
-  const moneyOut = filtered.filter((a) => a.amount < 0).reduce((s, a) => s + a.amount, 0);
-  const income = filtered.filter((a) => incomeCats.has(lower(a.category)) && a.amount > 0).reduce((s, a) => s + a.amount, 0);
+  const counted = filtered.filter((a) => a.date <= today);
+  const moneyIn = counted.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
+  const moneyOut = counted.filter((a) => a.amount < 0).reduce((s, a) => s + a.amount, 0);
+  const income = counted.filter((a) => incomeCats.has(lower(a.category)) && a.amount > 0).reduce((s, a) => s + a.amount, 0);
 
   const groups = useMemo(() => {
     const out = [];
@@ -85,12 +86,12 @@ export default function Activity() {
                   <div className="list-item clickable" key={a.id} onClick={() => openForm('activity', a)} role="button" tabIndex={0} onKeyDown={(ev) => ev.key === 'Enter' && openForm('activity', a)}>
                     <div className="grow">
                       <div className="title">
-                        {a.account} <span className="badge">{a.category}</span>
+                        {a.account} <span className="badge">{a.category}</span> {a.date > today && <span className="badge warn">Pending</span>}
                         {incomeCats.has(lower(a.category)) && <span className="badge good" style={{ marginLeft: 4 }}>income</span>}
                       </div>
                       <div className="sub">
                         {formatDate(a.date, { year: false })}
-                        {a.notes ? ` · ${a.notes}` : ''}
+                        {a.date > today ? ' · PENDING' : ''}{a.notes ? ` · ${a.notes}` : ''}
                       </div>
                     </div>
                     <div className={`amount ${a.amount > 0 ? 'good' : ''}`}>{a.amount > 0 ? `+${money(a.amount)}` : money(a.amount)}</div>

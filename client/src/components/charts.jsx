@@ -15,7 +15,7 @@ import {
   Tooltip,
   ReferenceLine,
 } from 'recharts';
-import { axisMoney, dollars, pct } from '../lib/format.js';
+import { axisMoney, dollars, pct, privacyText } from '../lib/format.js';
 
 // Categorical slots in fixed order (validated palette). Never cycled past 8:
 // callers fold the tail into "Other", which uses the neutral series color.
@@ -67,7 +67,7 @@ function TooltipBox({ active, payload, label, labelFormat, valueFormat, hideZero
       {rows.map((p) => (
         <div className="tt-row" key={p.dataKey}>
           <span className="tt-key" style={{ background: p.color || p.stroke || p.fill }} />
-          <span className="tt-value">{(p.payload?.__format?.[p.dataKey] || valueFormat || dollars)(p.value)}</span>
+          <span className="tt-value">{privacyText((p.payload?.__format?.[p.dataKey] || valueFormat || dollars)(p.value))}</span>
           <span className="tt-name">{p.name}</span>
         </div>
       ))}
@@ -157,7 +157,7 @@ export function TimeChart({
       <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid vertical={false} stroke="var(--grid)" />
         <XAxis dataKey={xKey} tick={axisTick} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} tickFormatter={xFormat} minTickGap={24} interval="preserveStartEnd" />
-        <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={yFormat} width={58} domain={yDomain || ['auto', 'auto']} />
+        <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => privacyText(yFormat(v))} width={58} domain={yDomain || ['auto', 'auto']} />
         <Tooltip
           content={<TooltipBox labelFormat={labelFormat || xFormat} valueFormat={valueFormat} />}
           cursor={{ stroke: 'var(--axis)', strokeWidth: 1 }}
@@ -211,7 +211,7 @@ export function BarsChart({ data, xKey = 'x', series, stacked = false, height = 
       <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barGap={2} barCategoryGap="20%">
         <CartesianGrid vertical={false} stroke="var(--grid)" />
         <XAxis dataKey={xKey} tick={axisTick} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} tickFormatter={xFormat} minTickGap={12} interval="preserveStartEnd" />
-        <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={yFormat} width={58} />
+        <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={(v) => privacyText(yFormat(v))} width={58} />
         <Tooltip
           content={<TooltipBox labelFormat={labelFormat || xFormat} valueFormat={valueFormat} hideZero={stacked} />}
           cursor={{ fill: 'var(--surface-2)' }}
@@ -261,7 +261,7 @@ export function Donut({ data, height = 190, format = dollars, centerLabel, cente
                   <div className="chart-tooltip">
                     <div className="tt-row">
                       <span className="tt-key" style={{ background: payload[0].payload.color }} />
-                      <span className="tt-value">{format(payload[0].value)}</span>
+                      <span className="tt-value">{privacyText(format(payload[0].value))}</span>
                       <span className="tt-name">
                         {payload[0].name} · {pct(payload[0].value / total)}
                       </span>
@@ -286,7 +286,7 @@ export function Donut({ data, height = 190, format = dollars, centerLabel, cente
           <div className="item" key={d.name}>
             <span className="swatch" style={{ background: d.color }} />
             <span className="name">{d.name}</span>
-            <span className="val">{format(d.value)}</span>
+            <span className="val">{privacyText(format(d.value))}</span>
             <span className="pct">{pct(d.value / total, 0)}</span>
           </div>
         ))}
@@ -312,7 +312,7 @@ export function RankedBars({ items, format = dollars, color = 'var(--s1)', total
                 </span>
               </span>
               <span className="small tabular">
-                <strong>{format(it.value)}</strong> <span className="muted">{sum > 0 ? pct(it.value / sum, 0) : ''}</span>
+                <strong>{privacyText(format(it.value))}</strong> <span className="muted">{sum > 0 ? pct(it.value / sum, 0) : ''}</span>
               </span>
             </div>
             <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-2)' }}>

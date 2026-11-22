@@ -175,6 +175,7 @@ export function ExpenseForm({ initial, onDone }) {
           />
         </Field>
         <DateField value={f.date} onChange={(v) => set('date', v)} today={today} />
+        {f.date > today && <div className="small ink-2 full">Future date: this will be marked Pending and excluded from totals until its date arrives.</div>}
         <Field label="Notes" className="full">
           <input className="input" value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional" />
         </Field>
@@ -244,6 +245,7 @@ export function ActivityForm({ initial, onDone }) {
           <Select value={f.category} onChange={(v) => set('category', v)} options={activityCategoryOptions(config, initial?.category)} placeholder="Choose…" />
         </Field>
         <DateField value={f.date} onChange={(v) => set('date', v)} today={today} />
+        {f.date > today && <div className="small ink-2 full">Future date: this will be marked Pending and excluded from totals until its date arrives.</div>}
         <Field label="Notes">
           <input className="input" value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional" />
         </Field>

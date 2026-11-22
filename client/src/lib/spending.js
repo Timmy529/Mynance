@@ -1,4 +1,4 @@
-import { monthKey, daysBetween, addDays, DAYS_PER_MONTH, monthRange, addMonths } from './dates.js';
+import { monthKey, daysBetween, addDays, DAYS_PER_MONTH, monthRange, addMonths, todayISO } from './dates.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 const amt = (r) => r.amount || 0;
@@ -20,7 +20,7 @@ export function paycheckTotals(p) {
 }
 
 export function inRange(records, start, end) {
-  return records.filter((r) => r.date && (!start || r.date >= start) && (!end || r.date <= end));
+  return records.filter((r) => r.date && r.date <= todayISO() && (!start || r.date >= start) && (!end || r.date <= end));
 }
 
 export function excludedCoreSet(categories) {
@@ -50,21 +50,23 @@ export function sumBy(records, keyFn, valueFn = amt) {
 // pre-tax/retirement savings withheld from paychecks, and the savings rate.
 //   saved       = income + retirement withholdings - expenses
 //   savingsRate = saved / (income + retirement withholdings)
-export function monthlyCashflow({ expenses, paychecks, activity, categories }, startKey, endKey) {
+export function monthlyCashflow({ expenses, paychecks, activity, categories }, startKey, endKey, { exclude = [] } = {}) {
   const months = monthRange(startKey, endKey);
   const rows = new Map(
     months.map((k) => [k, { month: k, net: 0, gross: 0, retirement: 0, other: 0, expenses: 0, core: 0 }]),
   );
   const nonCore = excludedCoreSet(categories);
+  const excluded = new Set([...exclude, ...categories.expense.filter((c) => c.excludeFromReimbursements).map((c) => c.name)].map(lower));
+  const today = todayISO();
   for (const e of expenses) {
     const row = rows.get(monthKey(e.date || '')) ;
-    if (!row) continue;
+    if (!row || e.date > today || excluded.has(lower(e.category))) continue;
     row.expenses += amt(e);
     if (!nonCore.has(lower(e.category))) row.core += amt(e);
   }
   for (const p of paychecks) {
     const row = rows.get(monthKey(p.date || ''));
-    if (!row) continue;
+    if (!row || p.date > today) continue;
     const t = paycheckTotals(p);
     row.net += t.net;
     row.gross += t.gross;
@@ -73,7 +75,7 @@ export function monthlyCashflow({ expenses, paychecks, activity, categories }, s
   }
   for (const a of otherIncome(activity, categories)) {
     const row = rows.get(monthKey(a.date));
-    if (row) row.other += a.amount;
+    if (row && a.date <= today) row.other += a.amount;
   }
   return months.map((k) => {
     const r = rows.get(k);
@@ -88,8 +90,9 @@ export function monthlyCashflow({ expenses, paychecks, activity, categories }, s
 // first record, so a newly started ledger isn't averaged over empty months.
 export function averages({ expenses, paychecks, activity, categories }, start, end, { exclude = [] } = {}) {
   const nonCore = excludedCoreSet(categories);
-  const excluded = new Set(exclude.map(lower));
-  const exp = inRange(expenses, start, end);
+  const reimbursementExcluded = new Set(categories.expense.filter((c) => c.excludeFromReimbursements).map((c) => lower(c.name)));
+  const excluded = new Set([...exclude, ...reimbursementExcluded].map(lower));
+  const exp = inRange(expenses, start, end).filter((e) => !reimbursementExcluded.has(lower(e.category)));
   const pays = inRange(paychecks, start, end);
   const other = inRange(otherIncome(activity, categories), start, end);
 
@@ -103,7 +106,7 @@ export function averages({ expenses, paychecks, activity, categories }, start, e
   const total = exp.reduce((s, e) => s + amt(e), 0);
   const core = exp.filter((e) => !nonCore.has(lower(e.category))).reduce((s, e) => s + amt(e), 0);
   const custom = exp.filter((e) => !excluded.has(lower(e.category))).reduce((s, e) => s + amt(e), 0);
-  const spendDays = spanDays(firstOf(expenses));
+  const spendDays = spanDays(firstOf(exp));
 
   let net = 0;
   let gross = 0;
@@ -147,7 +150,7 @@ export function averages({ expenses, paychecks, activity, categories }, start, e
       monthly: perMonth(income, incomeDays),
       monthlyGross: perMonth(gross + otherTotal, incomeDays),
     },
-    savingsRate: base > 0 ? (base - total) / base : null,
+    savingsRate: base > 0 ? (base - custom) / base : null,
   };
 }
 

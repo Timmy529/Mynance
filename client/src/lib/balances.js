@@ -102,7 +102,7 @@ export function monthlyInvestmentReturns(accounts, index, activity, startKey, en
   const inv = accounts.filter((a) => isInvestmentType(a.type));
   const activityByAccount = new Map();
   for (const a of activity) {
-    if (INTERNAL_FLOW.test(a.category || '')) continue;
+    if ((today && a.date > today) || INTERNAL_FLOW.test(a.category || '')) continue;
     const k = lower(a.account);
     if (!activityByAccount.has(k)) activityByAccount.set(k, []);
     activityByAccount.get(k).push(a);

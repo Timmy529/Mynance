@@ -97,14 +97,14 @@ function Spending({ start, end, exclude }) {
 function IncomeSavings({ start, end, exclude }) {
   const { data } = useData();
   const avg = useMemo(() => averages(ledger(data), start, end, { exclude }), [data, start, end, exclude]);
-  const rows = useMemo(() => monthlyCashflow(ledger(data), monthKey(start), monthKey(end)), [data, start, end]);
+  const rows = useMemo(() => monthlyCashflow(ledger(data), monthKey(start), monthKey(end), { exclude }), [data, start, end]);
   const withRate = rows.map((r) => ({ ...r, rate: r.savingsRate === null ? null : r.savingsRate }));
 
   return (
     <div className="stack">
       <div className="tiles">
-        <Stat label="Average daily spend" value={money(avg.spending.dailyAll)} sub={`core ${money(avg.spending.dailyCore)}`} />
-        <Stat label="Average monthly spend" value={dollars(avg.spending.monthlyAll)} sub={`core ${dollars(avg.spending.monthlyCore)}`} />
+        <Stat label="Average daily spend" value={money(avg.spending.dailyCustom)} sub={`core ${money(avg.spending.dailyCore)}`} />
+        <Stat label="Average monthly spend" value={dollars(avg.spending.monthlyCustom)} sub={`core ${dollars(avg.spending.monthlyCore)}`} />
         <Stat label="Average daily income" value={money(avg.income.daily)} sub="take-home + other income" />
         <Stat label="Average monthly income" value={dollars(avg.income.monthly)} sub={`gross ${dollars(avg.income.monthlyGross)}`} />
         <Stat label="Saved of income" value={pct(avg.savingsRate)} sub="incl. 401(k)/HSA from paychecks" />
@@ -362,6 +362,7 @@ export default function Metrics() {
   const [tab, setTab] = usePref('metrics.tab', 'spending');
   const [range, setRange] = usePref('metrics.range', '12m');
   const [exclude, setExclude] = usePref('metrics.exclude', []);
+  const rollupExclude = [...exclude, ...data.config.categories.expense.filter((c) => c.excludeFromReimbursements).map((c) => c.name)];
   const [showExclude, setShowExclude] = useState(false);
   const first = useMemo(() => firstRecordDate(data.records), [data.records]);
   const { start, end } = rangeFor(range, today, first);
@@ -422,8 +423,8 @@ export default function Metrics() {
           )}
         </div>
       )}
-      {tab === 'spending' && <Spending start={start} end={end} exclude={exclude} />}
-      {tab === 'income' && <IncomeSavings start={start} end={end} exclude={exclude} />}
+      {tab === 'spending' && <Spending start={start} end={end} exclude={rollupExclude} />}
+      {tab === 'income' && <IncomeSavings start={start} end={end} exclude={rollupExclude} />}
       {tab === 'investments' && <Investments start={start} end={end} />}
       {tab === 'networth' && <NetWorth start={start} end={end} />}
     </div>

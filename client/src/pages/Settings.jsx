@@ -388,7 +388,7 @@ function ExpenseCategories() {
   return (
     <Card
       title="Expense categories"
-      subtitle="Categories and subcategories offered when logging expenses. “Not core” categories are left out of core spending averages."
+      subtitle="Categories and subcategories offered when logging expenses. “Not core” categories are left out of core spending averages; reimbursement categories are omitted from expense rollups."
       actions={
         <button className="btn primary sm" onClick={() => setPrompt({ mode: 'addCategory' })}>
           <IconPlus /> Add category
@@ -404,10 +404,14 @@ function ExpenseCategories() {
                 <strong>{c.name}</strong>
                 {c.archived && <span className="badge">archived</span>}
                 {c.excludeFromCore && <span className="badge warn">not core</span>}
+                {c.excludeFromReimbursements && <span className="badge">reimbursement</span>}
                 <span className="muted small">{used} uses</span>
                 <span className="spacer" />
                 <label className="check small" title="Exclude from core spending">
                   <input type="checkbox" checked={!!c.excludeFromCore} onChange={(e) => update(c, { excludeFromCore: e.target.checked })} /> Not core
+                </label>
+                <label className="check small" title="Exclude this category from expense rollups for reimbursable expenses">
+                  <input type="checkbox" checked={!!c.excludeFromReimbursements} onChange={(e) => update(c, { excludeFromReimbursements: e.target.checked })} /> Reimbursement category
                 </label>
                 <button className="btn sm ghost" onClick={() => setPrompt({ mode: 'renameCategory', cat: c })}>
                   Rename
