@@ -217,7 +217,7 @@ function EditBalance({ record, onDone }) {
 
 function History() {
   const { data } = useData();
-  const accounts = data.config.accounts;
+  const accounts = data.config.accounts.filter((a) => !a.archived);
   const [account, setAccount] = usePref('balances.account', accounts[0]?.name || '');
   const [editing, setEditing] = useState(null);
   const acc = accounts.find((a) => lower(a.name) === lower(account)) || accounts[0];
