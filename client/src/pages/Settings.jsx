@@ -410,9 +410,15 @@ function ExpenseCategories() {
                 <label className="check small" title="Exclude from core spending">
                   <input type="checkbox" checked={!!c.excludeFromCore} onChange={(e) => update(c, { excludeFromCore: e.target.checked })} /> Not core
                 </label>
-                <label className="check small" title="Exclude this category from expense rollups for reimbursable expenses">
-                  <input type="checkbox" checked={!!c.excludeFromReimbursements} onChange={(e) => update(c, { excludeFromReimbursements: e.target.checked })} /> Reimbursement category
-                </label>
+                <div className="check small" title="Exclude this category from expense rollups for reimbursable expenses">
+                  <input
+                    id={`reimbursement-category-${encodeURIComponent(c.name)}`}
+                    type="checkbox"
+                    checked={!!c.excludeFromReimbursements}
+                    onChange={(e) => update(c, { excludeFromReimbursements: e.target.checked })}
+                  />
+                  <label htmlFor={`reimbursement-category-${encodeURIComponent(c.name)}`}>Reimbursement category</label>
+                </div>
                 <button className="btn sm ghost" onClick={() => setPrompt({ mode: 'renameCategory', cat: c })}>
                   Rename
                 </button>

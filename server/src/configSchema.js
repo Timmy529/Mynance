@@ -53,7 +53,7 @@ export function validateCategories(value) {
       if (seen.has(lower(s))) errors.push(`Category "${str(c?.name)}": duplicate subcategory "${s}"`);
       seen.add(lower(s));
     }
-    const cat = { name: str(c?.name), subcategories: subs, excludeFromCore: bool(c?.excludeFromCore) };
+    const cat = { name: str(c?.name), subcategories: subs, excludeFromCore: bool(c?.excludeFromCore), excludeFromReimbursements: bool(c?.excludeFromReimbursements) };
     if (c?.archived) cat.archived = true;
     return cat;
   });

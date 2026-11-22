@@ -5,7 +5,7 @@ import { Card, Select, Empty, Stat } from '../components/ui.jsx';
 import { IconPlus, IconDownload, IconSearch } from '../components/icons.jsx';
 import { money, dollars } from '../lib/format.js';
 import { monthKey, monthLabelLong, formatDate, addMonthKey, monthEnd } from '../lib/dates.js';
-import { allPaymentMethodNames } from '../lib/options.js';
+import { paymentMethodOptions, subcategoryOptions } from '../lib/options.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -53,6 +53,7 @@ export default function Expenses() {
   const openForm = useForms();
   const [period, setPeriod] = usePref('expenses.period', 'month');
   const [category, setCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
   const [method, setMethod] = useState('');
   const [q, setQ] = useState('');
   const [limit, setLimit] = useState(PAGE);
@@ -63,11 +64,12 @@ export default function Expenses() {
     return data.records.expenses
       .filter((e) => (!start || e.date >= start) && (!end || e.date <= end))
       .filter((e) => !category || lower(e.category) === lower(category))
+      .filter((e) => !subcategory || lower(e.subcategory) === lower(subcategory))
       .filter((e) => !method || lower(e.payment_method) === lower(method))
       .filter((e) => !query || [e.vendor, e.notes, e.category, e.subcategory, e.payment_method].some((v) => lower(v).includes(query)) || String(e.amount).includes(query))
       .slice()
       .reverse();
-  }, [data.records.expenses, start, end, category, method, q]);
+  }, [data.records.expenses, start, end, category, subcategory, method, q]);
 
   const reimbursementCats = new Set(data.config.categories.expense.filter((c) => c.excludeFromReimbursements).map((c) => lower(c.name)));
   const counted = filtered.filter((e) => e.date <= today && !reimbursementCats.has(lower(e.category)));
@@ -95,14 +97,16 @@ export default function Expenses() {
     return out;
   }, [filtered, limit, counted]);
 
-  const cats = data.config.categories.expense.map((c) => ({ value: c.name, label: c.name }));
-  const methods = allPaymentMethodNames(data.config).map((n) => ({ value: n, label: n }));
+  const cats = data.config.categories.expense.filter((c) => !c.archived || lower(c.name) === lower(category)).map((c) => ({ value: c.name, label: c.name }));
+  const subs = category ? subcategoryOptions(data.config, category) : [];
+  const methods = paymentMethodOptions(data.config).flatMap((group) => group.options).sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <div className="stack">
       <div className="filter-bar">
         <Select small value={period} onChange={(v) => { setPeriod(v); setLimit(PAGE); }} options={periodOptions(data.records.expenses)} aria-label="Period" style={{ width: 'auto' }} />
-        <Select small value={category} onChange={setCategory} options={cats} placeholder="All categories" aria-label="Category" style={{ width: 'auto' }} />
+        <Select small value={category} onChange={(v) => { setCategory(v); setSubcategory(''); }} options={cats} placeholder="All categories" aria-label="Category" style={{ width: 'auto' }} />
+        <Select small value={subcategory} onChange={setSubcategory} options={subs} placeholder="All subcategories" aria-label="Subcategory" disabled={!category || subs.length === 0} style={{ width: 'auto' }} />
         <Select small value={method} onChange={setMethod} options={methods} placeholder="All payment methods" aria-label="Payment method" style={{ width: 'auto' }} />
         <div className="input-prefix" style={{ flex: '1 1 180px', maxWidth: 320 }}>
           <span style={{ display: 'flex' }}>
@@ -122,7 +126,7 @@ export default function Expenses() {
       <div className="tiles">
         <Stat label="Total" value={dollars(total)} sub={`${filtered.length} expense${filtered.length === 1 ? '' : 's'}`} />
         {byCat.slice(0, 3).map(([name, v]) => (
-          <Stat key={name} label={name} value={dollars(v)} sub={total ? `${((v / total) * 100).toFixed(0)}% of total` : ''} onClick={() => setCategory(name)} />
+          <Stat key={name} label={name} value={dollars(v)} sub={total ? `${((v / total) * 100).toFixed(0)}% of total` : ''} onClick={() => { setCategory(name); setSubcategory(''); }} />
         ))}
       </div>
 
