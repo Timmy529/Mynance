@@ -4,7 +4,7 @@ import { Card, Stat, Tabs, Segmented, Select, Empty } from '../components/ui.jsx
 import { ChartCard, BarsChart, TimeChart, Donut, RankedBars, colorMap, NEUTRAL } from '../components/charts.jsx';
 import { computeCore, ledger } from '../lib/metrics.js';
 import { expenseBreakdown, averages, monthlyCashflow } from '../lib/spending.js';
-import { monthlySnapshots, monthlyInvestmentReturns, annualizeReturns, cumulativeReturn, buildBalanceIndex, snapshot, balanceHistoryStart } from '../lib/balances.js';
+import { monthlySnapshots, monthlyInvestmentReturns, dailyInvestmentReturns, annualizeReturns, cumulativeReturn, buildBalanceIndex, snapshot, balanceHistoryStart } from '../lib/balances.js';
 import { dollars, money, pct, signedPct, signedDollars, privacyText } from '../lib/format.js';
 import { monthKey, monthLabel, monthLabelLong, addMonthKey } from '../lib/dates.js';
 import { categoryOrder } from '../lib/options.js';
@@ -161,6 +161,7 @@ function IncomeSavings({ start, end, exclude }) {
 function Investments({ start, end }) {
   const { data, today } = useData();
   const [scope, setScope] = usePref('metrics.invScope', 'all');
+  const [returnBasis, setReturnBasis] = usePref('metrics.returnBasis', 'monthly');
   const invAccounts = data.config.accounts.filter((a) => isInvestmentType(a.type));
   const accounts = useMemo(() => {
     if (scope === 'all') return invAccounts;
@@ -172,8 +173,10 @@ function Investments({ start, end }) {
   const startKey = monthKey(start);
   const endKey = monthKey(end);
   const series = useMemo(() => monthlySnapshots(accounts, index, startKey, endKey, today).map((s) => ({ month: s.month, value: s.investments, contributed: s.contributed || null })), [accounts, index, startKey, endKey, today]);
-  const returns = useMemo(() => monthlyInvestmentReturns(accounts, index, data.records.activity, startKey, endKey, today), [accounts, index, data.records.activity, startKey, endKey, today]);
-  const allReturns = useMemo(() => monthlyInvestmentReturns(accounts, index, data.records.activity, balanceHistoryStart(data.records.balances, today), monthKey(today), today), [accounts, index, data.records.activity, data.records.balances, today]);
+  const calculateReturns = returnBasis === 'daily' ? dailyInvestmentReturns : monthlyInvestmentReturns;
+  const returns = useMemo(() => calculateReturns(accounts, index, data.records.activity, startKey, endKey, today), [calculateReturns, accounts, index, data.records.activity, startKey, endKey, today]);
+  const allReturns = useMemo(() => calculateReturns(accounts, index, data.records.activity, balanceHistoryStart(data.records.balances, today), monthKey(today), today), [calculateReturns, accounts, index, data.records.activity, data.records.balances, today]);
+  const timeframeContributions = returns.reduce((sum, row) => sum + row.flows, 0);
   const now = snapshot(data.config.accounts, index, today).totals;
   const sub = snapshot(accounts, index, today).totals;
   const value = sub.investments;
@@ -196,6 +199,7 @@ function Investments({ start, end }) {
   return (
     <div className="stack">
       <div className="filter-bar" style={{ marginBottom: 0 }}>
+        <Segmented value={returnBasis} onChange={setReturnBasis} label="Return calculation" options={[{ value: 'monthly', label: 'Monthly' }, { value: 'daily', label: 'Daily' }]} />
         <Select
           small
           value={scope}
@@ -213,8 +217,9 @@ function Investments({ start, end }) {
       <div className="tiles">
         <Stat label="Current value" value={dollars(value)} />
         <Stat label="Total contributed" value={contributed ? dollars(contributed) : '—'} sub={contributed ? `${dollars(value - contributed)} gain (${pct((value - contributed) / contributed)})` : 'Record contributions with balances'} />
+        <Stat label="Contributions in range" value={signedDollars(timeframeContributions)} sub="Net investment contributions for selected timeframe" />
         <Stat label="Gain in range" value={signedDollars(totalGain)} sub={`cumulative ${signedPct(cumulativeReturn(returns))}`} />
-        <Stat label="Annualized return" value={signedPct(annualized)} sub={`${returns.filter((r) => r.return !== null).length} months in range · lifetime ${signedPct(lifetime)}`} />
+        <Stat label="Annualized return" value={signedPct(annualized)} sub={`${returns.filter((r) => r.return !== null).length} periods in range · lifetime ${signedPct(lifetime)}`} />
         <Stat label="Retirement share of investments" value={pct(now.investments ? now.retirement / now.investments : null)} sub={`${dollars(now.retirement)} of ${dollars(now.investments)}`} />
         <Stat label="Investments share of net worth" value={pct(now.netWorth > 0 ? now.investments / now.netWorth : null)} sub={`${pct(now.assets ? now.investments / now.assets : null)} of total assets`} />
       </div>
@@ -245,8 +250,8 @@ function Investments({ start, end }) {
         />
       </ChartCard>
       <ChartCard
-        title="Monthly gain"
-        subtitle="Percent gain each month, net of contributions"
+        title={returnBasis === 'daily' ? 'Daily-weighted gain' : 'Monthly gain'}
+        subtitle={returnBasis === 'daily' ? 'Period return weighted by the actual dates of recorded cash flows' : 'Percent gain each month, net of contributions'}
         table={{
           columns: [
             { key: 'month', label: 'Month', format: monthLabelLong },
@@ -272,7 +277,7 @@ function Investments({ start, end }) {
             cellColor={(d) => (d.return < 0 ? 'var(--s8)' : 'var(--s1)')}
           />
         ) : (
-          <Empty>Record balances for at least two months to see monthly gains.</Empty>
+          <Empty>Record balances for at least two month ends to see investment gains.</Empty>
         )}
       </ChartCard>
     </div>

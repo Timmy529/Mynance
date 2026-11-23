@@ -1,5 +1,5 @@
 import { accountTypeInfo, isInvestmentType } from '@shared/accountTypes.js';
-import { monthRange, monthEnd, addMonthKey, monthKey } from './dates.js';
+import { monthRange, monthEnd, addMonthKey, monthKey, daysBetween } from './dates.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -134,6 +134,54 @@ export function monthlyInvestmentReturns(accounts, index, activity, startKey, en
     if (n === 0) continue;
     const gain = end - start - flows;
     const denom = start + flows / 2;
+    out.push({ month: k, start, end, flows, gain, return: denom > 0 ? gain / denom : null });
+  }
+  return out;
+}
+
+
+
+// Daily-weighted Modified Dietz returns. Each external cash flow is weighted by
+// the fraction of the measurement period it was invested (actual transaction date).
+export function dailyInvestmentReturns(accounts, index, activity, startKey, endKey, today) {
+  const inv = accounts.filter((a) => isInvestmentType(a.type));
+  const activityByAccount = new Map();
+  for (const a of activity) {
+    if ((today && a.date > today) || INTERNAL_FLOW.test(a.category || '')) continue;
+    const k = lower(a.account);
+    if (!activityByAccount.has(k)) activityByAccount.set(k, []);
+    activityByAccount.get(k).push(a);
+  }
+  const out = [];
+  for (const k of monthRange(startKey, endKey)) {
+    const startDate = monthEnd(addMonthKey(k, -1));
+    const endDate = today && monthEnd(k) > today ? today : monthEnd(k);
+    const periodDays = Math.max(1, daysBetween(startDate, endDate));
+    let start = 0, end = 0, flows = 0, weightedFlows = 0, n = 0;
+    for (const acc of inv) {
+      const a0 = valueAsOf(index, acc.name, startDate);
+      const a1 = valueAsOf(index, acc.name, endDate);
+      if (!a0 || !a1) continue;
+      n++;
+      start += a0.balance;
+      end += a1.balance;
+      const acts = (activityByAccount.get(lower(acc.name)) || []).filter((a) => a.date > startDate && a.date <= endDate);
+      const flow = a0.contributed !== null && a1.contributed !== null
+        ? a1.contributed - a0.contributed
+        : acts.reduce((sum, a) => sum + (a.amount || 0), 0);
+      flows += flow;
+      const activityTotal = acts.reduce((sum, a) => sum + (a.amount || 0), 0);
+      if (acts.length && Math.abs(activityTotal) > 0.0001 && Math.abs(activityTotal - flow) < Math.max(1, Math.abs(flow) * 0.02)) {
+        weightedFlows += acts.reduce((sum, a) => sum + (a.amount || 0) * (daysBetween(a.date, endDate) / periodDays), 0);
+      } else {
+        // Contribution snapshots lack transaction dates; retain a neutral midpoint
+        // weight rather than inventing timing for those flows.
+        weightedFlows += flow / 2;
+      }
+    }
+    if (!n) continue;
+    const gain = end - start - flows;
+    const denom = start + weightedFlows;
     out.push({ month: k, start, end, flows, gain, return: denom > 0 ? gain / denom : null });
   }
   return out;

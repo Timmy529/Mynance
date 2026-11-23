@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { addMonths, monthRange, daysBetween, monthEnd, addDays } from './dates.js';
-import { buildBalanceIndex, valueAsOf, snapshot, monthlySnapshots, monthlyInvestmentReturns, annualizeReturns } from './balances.js';
+import { buildBalanceIndex, valueAsOf, snapshot, monthlySnapshots, monthlyInvestmentReturns, dailyInvestmentReturns, annualizeReturns } from './balances.js';
 import { paycheckTotals, monthlyCashflow, averages, expenseBreakdown, currentSalary, salaryHistory, nextPaycheckDate } from './spending.js';
 import { itemMonthAmount, budgetByMonth, budgetVsActual, burnDown, projectSpending } from './budget.js';
 import { projectNetWorth, retirementPlan, projectInvestments } from './projections.js';
@@ -276,5 +276,23 @@ describe('privacy formatting', () => {
     expect(dollars(123456)).not.toBe('••••••');
     setPrivacyView(false, 'dashboard');
     expect(dollars(123456)).not.toBe('••••••');
+  });
+});
+
+
+describe('daily investment returns', () => {
+  it('weights recorded contributions by their actual transaction dates', () => {
+    const accounts = [{ name: 'Brokerage', type: 'brokerage' }];
+    const balances = [
+      { account: 'Brokerage', date: '2024-01-31', balance: 1000, contributed: 1000 },
+      { account: 'Brokerage', date: '2024-02-29', balance: 1200, contributed: 1100 },
+    ];
+    const index = buildBalanceIndex(balances);
+    const activity = [{ account: 'Brokerage', date: '2024-02-25', amount: 100, category: 'Contribution' }];
+    const rows = dailyInvestmentReturns(accounts, index, activity, '2024-02', '2024-02', '2024-02-29');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].flows).toBe(100);
+    expect(rows[0].gain).toBe(100);
+    expect(rows[0].return).toBeCloseTo(100 / (1000 + 100 * 4 / 29), 6);
   });
 });

@@ -7,6 +7,7 @@ import { money, dollars } from '../lib/format.js';
 import { monthKey, monthLabelLong, formatDate } from '../lib/dates.js';
 import { accountOptions, activityCategoryOptions } from '../lib/options.js';
 import { periodRange, periodOptions } from './Expenses.jsx';
+import { buildBalanceIndex, valueAsOf } from '../lib/balances.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -35,6 +36,23 @@ export default function Activity() {
   const moneyIn = counted.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
   const moneyOut = counted.filter((a) => a.amount < 0).reduce((s, a) => s + a.amount, 0);
   const income = counted.filter((a) => incomeCats.has(lower(a.category)) && a.amount > 0).reduce((s, a) => s + a.amount, 0);
+
+  // Estimate balances from the latest recorded snapshot plus all later activity,
+  // including future-dated pending transactions.
+  const balanceIndex = useMemo(() => buildBalanceIndex(data.records.balances), [data.records.balances]);
+  const balanceEstimates = useMemo(() => {
+    const eligible = data.config.accounts.filter((a) => !a.archived && (!account || lower(a.name) === lower(account)));
+    return eligible.map((acc) => {
+      const base = valueAsOf(balanceIndex, acc.name, today);
+      if (!base) return null;
+      const changes = data.records.activity
+        .filter((a) => lower(a.account) === lower(acc.name) && a.date > base.date)
+        .reduce((sum, a) => sum + (a.amount || 0), 0);
+      return { account: acc.name, asOf: base.date, balance: base.balance + changes, pending: data.records.activity.filter((a) => lower(a.account) === lower(acc.name) && a.date > today).reduce((sum, a) => sum + (a.amount || 0), 0) };
+    }).filter(Boolean);
+  }, [data.config.accounts, data.records.activity, balanceIndex, today, account]);
+  const estimatedBalance = balanceEstimates.reduce((sum, row) => sum + row.balance, 0);
+  const pendingImpact = balanceEstimates.reduce((sum, row) => sum + row.pending, 0);
 
   const groups = useMemo(() => {
     const out = [];
@@ -67,6 +85,7 @@ export default function Activity() {
       </div>
 
       <div className="tiles">
+        <Stat label="Estimated account balance" value={balanceEstimates.length ? dollars(estimatedBalance) : '—'} sub={balanceEstimates.length ? `${balanceEstimates.length} account${balanceEstimates.length === 1 ? '' : 's'} · pending impact ${pendingImpact >= 0 ? '+' : ''}${dollars(pendingImpact)}` : 'Record an account balance to start an estimate'} />
         <Stat label="Money in" value={dollars(moneyIn)} />
         <Stat label="Money out" value={dollars(-moneyOut)} />
         <Stat label="Counted as income" value={dollars(income)} />
