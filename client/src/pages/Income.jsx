@@ -14,7 +14,7 @@ function Paychecks() {
   const years = useMemo(() => {
     const ys = [...new Set(data.records.paychecks.map((p) => p.date.slice(0, 4)))];
     if (!ys.includes(today.slice(0, 4))) ys.push(today.slice(0, 4));
-    return ys.sort().reverse().slice(0, 6);
+    return ys.sort().reverse().slice(0, 10);
   }, [data.records.paychecks, today]);
   const [year, setYear] = usePref('income.year', today.slice(0, 4));
   const y = years.includes(year) ? year : years[0];
