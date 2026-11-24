@@ -175,6 +175,7 @@ export function ExpenseForm({ initial, onDone }) {
           />
         </Field>
         <DateField value={f.date} onChange={(v) => set('date', v)} today={today} />
+        {f.date > today && <div className="small ink-2 full">Future date: this will be marked Pending and excluded from totals until its date arrives.</div>}
         <Field label="Notes" className="full">
           <input className="input" value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional" />
         </Field>
@@ -244,6 +245,7 @@ export function ActivityForm({ initial, onDone }) {
           <Select value={f.category} onChange={(v) => set('category', v)} options={activityCategoryOptions(config, initial?.category)} placeholder="Choose…" />
         </Field>
         <DateField value={f.date} onChange={(v) => set('date', v)} today={today} />
+        {f.date > today && <div className="small ink-2 full">Future date: this will be marked Pending and excluded from totals until its date arrives.</div>}
         <Field label="Notes">
           <input className="input" value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional" />
         </Field>
@@ -272,7 +274,7 @@ export function PaycheckForm({ initial, onDone }) {
   // New paychecks start as a copy of the previous one, dated one pay period later.
   const [f, setF] = useState(() => {
     if (editing) return { ...initial };
-    const base = { date: nextPaycheckDate(data.records.paychecks, today), employer: '', notes: '', net: '', employer_match: '' };
+    const base = { date: nextPaycheckDate(data.records.paychecks, today), employer: '', notes: '', net: '', employer_match: '', reimbursements: '' };
     for (const k of PAY_KEYS) base[k] = '';
     if (previous) {
       base.employer = previous.employer;
@@ -284,7 +286,7 @@ export function PaycheckForm({ initial, onDone }) {
   const [netTouched, setNetTouched] = useState(editing);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
-  const totals = paycheckTotals({ ...Object.fromEntries(PAY_KEYS.map((k) => [k, num(f[k])])), net: null });
+  const totals = paycheckTotals({ ...Object.fromEntries(PAY_KEYS.map((k) => [k, num(f[k])])), reimbursements: num(f.reimbursements), net: null });
   const netValue = netTouched ? f.net : Math.round(totals.computedNet * 100) / 100;
   const diff = netTouched && f.net !== '' ? Number(f.net) - totals.computedNet : 0;
   const employers = [...new Set(data.records.paychecks.map((p) => p.employer).filter(Boolean))];
@@ -334,6 +336,14 @@ export function PaycheckForm({ initial, onDone }) {
           </div>
         </div>
       ))}
+      <div>
+        <div className="section-title" style={{ marginBottom: 8 }}>Reimbursements</div>
+        <div className="form-grid">
+          <Field label="Reimbursements" hint="Added to take-home pay, but excluded from gross and income totals.">
+            <MoneyInput value={f.reimbursements} onChange={(v) => set('reimbursements', v)} />
+          </Field>
+        </div>
+      </div>
       <div className="form-grid">
         <Field label="Net pay (take-home)" hint={netTouched ? (Math.abs(diff) >= 0.01 ? `Differs from calculated ${money(totals.computedNet)} by ${money(diff)}` : 'Matches the calculated amount') : 'Calculated from the fields above. Type to override.'}>
           <MoneyInput

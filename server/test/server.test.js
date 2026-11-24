@@ -134,6 +134,17 @@ test('paycheck net is computed when blank', async () => {
   assert.equal(r.data.net, 2494);
 });
 
+test('paycheck reimbursements increase net but not gross', async () => {
+  const r = await api('POST', '/records/paychecks', {
+    date: '2026-03-20', employer: 'Acme', gross: 4000, reimbursements: 250,
+    federal_tax: 500, state_tax: 200, social_security: 248, medicare: 58,
+    retirement_401k: 400, medical: 100,
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.gross, 4000);
+  assert.equal(r.data.reimbursements, 250);
+});
+
 test('rename cascades into records and budgets', async () => {
   await api('PUT', '/config/budgets', { 2026: { items: [{ category: 'Groceries', subcategory: '', kind: 'variable', annual: 6000 }] } });
   let r = await api('POST', '/rename', { kind: 'account', from: 'Visa', to: 'Sapphire' });

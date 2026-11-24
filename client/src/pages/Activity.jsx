@@ -7,6 +7,7 @@ import { money, dollars } from '../lib/format.js';
 import { monthKey, monthLabelLong, formatDate } from '../lib/dates.js';
 import { accountOptions, activityCategoryOptions } from '../lib/options.js';
 import { periodRange, periodOptions } from './Expenses.jsx';
+import { buildBalanceIndex, valueAsOf } from '../lib/balances.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -31,9 +32,27 @@ export default function Activity() {
     [data.records.activity, start, end, account, category],
   );
 
-  const moneyIn = filtered.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
-  const moneyOut = filtered.filter((a) => a.amount < 0).reduce((s, a) => s + a.amount, 0);
-  const income = filtered.filter((a) => incomeCats.has(lower(a.category)) && a.amount > 0).reduce((s, a) => s + a.amount, 0);
+  const counted = filtered.filter((a) => a.date <= today);
+  const moneyIn = counted.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0);
+  const moneyOut = counted.filter((a) => a.amount < 0).reduce((s, a) => s + a.amount, 0);
+  const income = counted.filter((a) => incomeCats.has(lower(a.category)) && a.amount > 0).reduce((s, a) => s + a.amount, 0);
+
+  // Estimate balances from the latest recorded snapshot plus all later activity,
+  // including future-dated pending transactions.
+  const balanceIndex = useMemo(() => buildBalanceIndex(data.records.balances), [data.records.balances]);
+  const balanceEstimates = useMemo(() => {
+    const eligible = data.config.accounts.filter((a) => !a.archived && (!account || lower(a.name) === lower(account)));
+    return eligible.map((acc) => {
+      const base = valueAsOf(balanceIndex, acc.name, today);
+      if (!base) return null;
+      const changes = data.records.activity
+        .filter((a) => lower(a.account) === lower(acc.name) && a.date > base.date)
+        .reduce((sum, a) => sum + (a.amount || 0), 0);
+      return { account: acc.name, asOf: base.date, balance: base.balance + changes, pending: data.records.activity.filter((a) => lower(a.account) === lower(acc.name) && a.date > today).reduce((sum, a) => sum + (a.amount || 0), 0) };
+    }).filter(Boolean);
+  }, [data.config.accounts, data.records.activity, balanceIndex, today, account]);
+  const estimatedBalance = balanceEstimates.reduce((sum, row) => sum + row.balance, 0);
+  const pendingImpact = balanceEstimates.reduce((sum, row) => sum + row.pending, 0);
 
   const groups = useMemo(() => {
     const out = [];
@@ -66,6 +85,7 @@ export default function Activity() {
       </div>
 
       <div className="tiles">
+        <Stat label="Estimated account balance" value={balanceEstimates.length ? dollars(estimatedBalance) : '—'} sub={balanceEstimates.length ? `${balanceEstimates.length} account${balanceEstimates.length === 1 ? '' : 's'} · pending impact ${pendingImpact >= 0 ? '+' : ''}${dollars(pendingImpact)}` : 'Record an account balance to start an estimate'} />
         <Stat label="Money in" value={dollars(moneyIn)} />
         <Stat label="Money out" value={dollars(-moneyOut)} />
         <Stat label="Counted as income" value={dollars(income)} />
@@ -85,12 +105,12 @@ export default function Activity() {
                   <div className="list-item clickable" key={a.id} onClick={() => openForm('activity', a)} role="button" tabIndex={0} onKeyDown={(ev) => ev.key === 'Enter' && openForm('activity', a)}>
                     <div className="grow">
                       <div className="title">
-                        {a.account} <span className="badge">{a.category}</span>
+                        {a.account} <span className="badge">{a.category}</span> {a.date > today && <span className="badge warn">Pending</span>}
                         {incomeCats.has(lower(a.category)) && <span className="badge good" style={{ marginLeft: 4 }}>income</span>}
                       </div>
                       <div className="sub">
                         {formatDate(a.date, { year: false })}
-                        {a.notes ? ` · ${a.notes}` : ''}
+                        {a.date > today ? ' · PENDING' : ''}{a.notes ? ` · ${a.notes}` : ''}
                       </div>
                     </div>
                     <div className={`amount ${a.amount > 0 ? 'good' : ''}`}>{a.amount > 0 ? `+${money(a.amount)}` : money(a.amount)}</div>

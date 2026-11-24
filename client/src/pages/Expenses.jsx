@@ -5,7 +5,7 @@ import { Card, Select, Empty, Stat } from '../components/ui.jsx';
 import { IconPlus, IconDownload, IconSearch } from '../components/icons.jsx';
 import { money, dollars } from '../lib/format.js';
 import { monthKey, monthLabelLong, formatDate, addMonthKey, monthEnd } from '../lib/dates.js';
-import { allPaymentMethodNames } from '../lib/options.js';
+import { paymentMethodOptions, subcategoryOptions } from '../lib/options.js';
 
 const lower = (s) => String(s ?? '').toLowerCase();
 
@@ -14,18 +14,19 @@ export function periodRange(period, today) {
   const thisMonth = monthKey(today);
   switch (period) {
     case 'month':
-      return [`${thisMonth}-01`, today];
+      return [`${thisMonth}-01`, monthEnd(thisMonth)];
     case 'last-month': {
       const k = addMonthKey(thisMonth, -1);
       return [`${k}-01`, monthEnd(k)];
     }
     case 'ytd':
-      return [`${y}-01-01`, today];
+      return [`${y}-01-01`, `${y}-12-31`];
     case '12m':
-      return [`${addMonthKey(thisMonth, -11)}-01`, today];
+      return [`${addMonthKey(thisMonth, -11)}-01`, monthEnd(thisMonth)];
     case 'all':
       return [null, null];
     default:
+      if (/^\d{4}-\d{2}$/.test(period)) return [`${period}-01`, monthEnd(period)];
       if (/^\d{4}$/.test(period)) return [`${period}-01-01`, `${period}-12-31`];
       return [null, null];
   }
@@ -33,6 +34,7 @@ export function periodRange(period, today) {
 
 export function periodOptions(records) {
   const years = [...new Set(records.map((r) => r.date?.slice(0, 4)).filter(Boolean))].sort().reverse();
+  const months = [...new Set(records.map((r) => r.date?.slice(0, 7)).filter(Boolean))].sort().reverse();
   return [
     { value: 'month', label: 'This month' },
     { value: 'last-month', label: 'Last month' },
@@ -40,6 +42,7 @@ export function periodOptions(records) {
     { value: '12m', label: 'Last 12 months' },
     { value: 'all', label: 'All time' },
     ...years.map((y) => ({ value: y, label: y })),
+    ...months.map((m) => ({ value: m, label: monthLabelLong(m) })),
   ];
 }
 
@@ -50,6 +53,7 @@ export default function Expenses() {
   const openForm = useForms();
   const [period, setPeriod] = usePref('expenses.period', 'month');
   const [category, setCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
   const [method, setMethod] = useState('');
   const [q, setQ] = useState('');
   const [limit, setLimit] = useState(PAGE);
@@ -60,18 +64,21 @@ export default function Expenses() {
     return data.records.expenses
       .filter((e) => (!start || e.date >= start) && (!end || e.date <= end))
       .filter((e) => !category || lower(e.category) === lower(category))
+      .filter((e) => !subcategory || lower(e.subcategory) === lower(subcategory))
       .filter((e) => !method || lower(e.payment_method) === lower(method))
       .filter((e) => !query || [e.vendor, e.notes, e.category, e.subcategory, e.payment_method].some((v) => lower(v).includes(query)) || String(e.amount).includes(query))
       .slice()
       .reverse();
-  }, [data.records.expenses, start, end, category, method, q]);
+  }, [data.records.expenses, start, end, category, subcategory, method, q]);
 
-  const total = filtered.reduce((s, e) => s + (e.amount || 0), 0);
+  const reimbursementCats = new Set(data.config.categories.expense.filter((c) => c.excludeFromReimbursements).map((c) => lower(c.name)));
+  const counted = filtered.filter((e) => e.date <= today && !reimbursementCats.has(lower(e.category)));
+  const total = counted.reduce((s, e) => s + (e.amount || 0), 0);
   const byCat = useMemo(() => {
     const m = new Map();
-    for (const e of filtered) m.set(e.category, (m.get(e.category) || 0) + (e.amount || 0));
+    for (const e of counted) m.set(e.category, (m.get(e.category) || 0) + (e.amount || 0));
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [filtered]);
+  }, [filtered, today, data.config.categories.expense]);
 
   const groups = useMemo(() => {
     const out = [];
@@ -85,19 +92,21 @@ export default function Expenses() {
       g.items.push(e);
     }
     const totals = new Map();
-    for (const e of filtered) totals.set(monthKey(e.date), (totals.get(monthKey(e.date)) || 0) + (e.amount || 0));
+    for (const e of counted) totals.set(monthKey(e.date), (totals.get(monthKey(e.date)) || 0) + (e.amount || 0));
     for (const g of out) g.total = totals.get(g.key);
     return out;
-  }, [filtered, limit]);
+  }, [filtered, limit, counted]);
 
-  const cats = data.config.categories.expense.map((c) => ({ value: c.name, label: c.name }));
-  const methods = allPaymentMethodNames(data.config).map((n) => ({ value: n, label: n }));
+  const cats = data.config.categories.expense.filter((c) => !c.archived || lower(c.name) === lower(category)).map((c) => ({ value: c.name, label: c.name }));
+  const subs = category ? subcategoryOptions(data.config, category) : [];
+  const methods = paymentMethodOptions(data.config).flatMap((group) => group.options).sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <div className="stack">
       <div className="filter-bar">
         <Select small value={period} onChange={(v) => { setPeriod(v); setLimit(PAGE); }} options={periodOptions(data.records.expenses)} aria-label="Period" style={{ width: 'auto' }} />
-        <Select small value={category} onChange={setCategory} options={cats} placeholder="All categories" aria-label="Category" style={{ width: 'auto' }} />
+        <Select small value={category} onChange={(v) => { setCategory(v); setSubcategory(''); }} options={cats} placeholder="All categories" aria-label="Category" style={{ width: 'auto' }} />
+        <Select small value={subcategory} onChange={setSubcategory} options={subs} placeholder="All subcategories" aria-label="Subcategory" disabled={!category || subs.length === 0} style={{ width: 'auto' }} />
         <Select small value={method} onChange={setMethod} options={methods} placeholder="All payment methods" aria-label="Payment method" style={{ width: 'auto' }} />
         <div className="input-prefix" style={{ flex: '1 1 180px', maxWidth: 320 }}>
           <span style={{ display: 'flex' }}>
@@ -117,7 +126,7 @@ export default function Expenses() {
       <div className="tiles">
         <Stat label="Total" value={dollars(total)} sub={`${filtered.length} expense${filtered.length === 1 ? '' : 's'}`} />
         {byCat.slice(0, 3).map(([name, v]) => (
-          <Stat key={name} label={name} value={dollars(v)} sub={total ? `${((v / total) * 100).toFixed(0)}% of total` : ''} onClick={() => setCategory(name)} />
+          <Stat key={name} label={name} value={dollars(v)} sub={total ? `${((v / total) * 100).toFixed(0)}% of total` : ''} onClick={() => { setCategory(name); setSubcategory(''); }} />
         ))}
       </div>
 
@@ -132,14 +141,14 @@ export default function Expenses() {
               <div key={g.key}>
                 <div className="list-group-head">
                   <span>{monthLabelLong(g.key)}</span>
-                  <span className="tabular">{money(g.total)}</span>
+                  <span className="tabular">{g.total === undefined ? '—' : money(g.total)}</span>
                 </div>
                 {g.items.map((e) => (
                   <div className="list-item clickable" key={e.id} onClick={() => openForm('expense', e)} role="button" tabIndex={0} onKeyDown={(ev) => ev.key === 'Enter' && openForm('expense', e)}>
                     <div className="grow">
-                      <div className="title">{e.vendor}</div>
+                      <div className="title">{e.vendor} {e.date > today && <span className="badge warn">Pending</span>} {reimbursementCats.has(lower(e.category)) && <span className="badge">Reimbursement</span>}</div>
                       <div className="sub">
-                        {formatDate(e.date, { year: false })} · {e.category}
+                        {formatDate(e.date, { year: false })} · {e.category}{e.date > today ? ' · PENDING' : ''}
                         {e.subcategory ? ` › ${e.subcategory}` : ''} · {e.payment_method}
                         {e.notes ? ` · ${e.notes}` : ''}
                       </div>

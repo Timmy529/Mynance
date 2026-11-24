@@ -67,6 +67,7 @@ export const KINDS = {
       f('other_deductions', 'Other deductions', 'money', ['otherdeductions', 'other', 'deductions']),
       f('net', 'Net pay', 'money', ['net', 'netpay', 'takehome', 'takehomepay', 'deposit']),
       f('employer_match', 'Employer match', 'money', ['match', 'employermatch', '401kmatch', 'companymatch']),
+      f('reimbursements', 'Reimbursements', 'money', ['reimbursements', 'reimbursement', 'reimbursed', 'reimbursable', 'expense reimbursement']),
       f('notes', 'Notes', 'text', ['notes', 'note', 'memo', 'comment']),
     ],
   },

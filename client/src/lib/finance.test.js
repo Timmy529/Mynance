@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { addMonths, monthRange, daysBetween, monthEnd, addDays } from './dates.js';
-import { buildBalanceIndex, valueAsOf, snapshot, monthlySnapshots, monthlyInvestmentReturns, annualizeReturns } from './balances.js';
+import { buildBalanceIndex, valueAsOf, snapshot, monthlySnapshots, monthlyInvestmentReturns, dailyInvestmentReturns, annualizeReturns } from './balances.js';
 import { paycheckTotals, monthlyCashflow, averages, expenseBreakdown, currentSalary, salaryHistory, nextPaycheckDate } from './spending.js';
 import { itemMonthAmount, budgetByMonth, budgetVsActual, burnDown, projectSpending } from './budget.js';
 import { projectNetWorth, retirementPlan, projectInvestments } from './projections.js';
@@ -105,6 +105,29 @@ describe('income & spending', () => {
     expect(t.taxes).toBe(700);
     expect(t.retirement).toBe(400);
     expect(t.net).toBe(2800);
+  });
+
+  it('adds reimbursements to take-home pay without counting them as income', () => {
+    const reimbursed = {
+      ...paychecks[1],
+      reimbursements: 250,
+      net: null,
+    };
+    const totals = paycheckTotals(reimbursed);
+    expect(totals.gross).toBe(4000);
+    expect(totals.reimbursements).toBe(250);
+    expect(totals.computedNet).toBe(3050);
+    expect(totals.net).toBe(3050);
+
+    const dataWithReimbursement = { ...data, paychecks: [reimbursed] };
+    const [month] = monthlyCashflow(dataWithReimbursement, '2026-02', '2026-02');
+    expect(month.net).toBe(3050);
+    expect(month.income).toBe(2800);
+
+    const avg = averages(dataWithReimbursement, '2026-02-01', '2026-02-28');
+    expect(avg.income.net).toBe(2800);
+    expect(avg.income.gross).toBe(4000);
+    expect(avg.income.total).toBe(2800);
   });
 
   it('computes monthly cashflow and savings rate', () => {
@@ -238,5 +261,38 @@ describe('projections', () => {
     });
     expect(rich.depletionAge).toBeNull();
     expect(rich.atRetirement).toBeGreaterThan(1e6);
+  });
+});
+
+describe('privacy formatting', () => {
+  it('masks financial values outside the Expenses page and restores them on Expenses', async () => {
+    const { setPrivacyView, money, dollars, pct, axisMoney } = await import('./format.js');
+    setPrivacyView(true, 'dashboard');
+    expect(dollars(123456)).toBe('••••••');
+    expect(money(123.45)).toBe('••••••');
+    expect(pct(0.25)).toBe('••••••');
+    expect(axisMoney(100000)).toBe('••••••');
+    setPrivacyView(true, 'expenses');
+    expect(dollars(123456)).not.toBe('••••••');
+    setPrivacyView(false, 'dashboard');
+    expect(dollars(123456)).not.toBe('••••••');
+  });
+});
+
+
+describe('daily investment returns', () => {
+  it('weights recorded contributions by their actual transaction dates', () => {
+    const accounts = [{ name: 'Brokerage', type: 'brokerage' }];
+    const balances = [
+      { account: 'Brokerage', date: '2024-01-31', balance: 1000, contributed: 1000 },
+      { account: 'Brokerage', date: '2024-02-29', balance: 1200, contributed: 1100 },
+    ];
+    const index = buildBalanceIndex(balances);
+    const activity = [{ account: 'Brokerage', date: '2024-02-25', amount: 100, category: 'Contribution' }];
+    const rows = dailyInvestmentReturns(accounts, index, activity, '2024-02', '2024-02', '2024-02-29');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].flows).toBe(100);
+    expect(rows[0].gain).toBe(100);
+    expect(rows[0].return).toBeCloseTo(100 / (1000 + 100 * 4 / 29), 6);
   });
 });

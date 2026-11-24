@@ -14,7 +14,7 @@ function Paychecks() {
   const years = useMemo(() => {
     const ys = [...new Set(data.records.paychecks.map((p) => p.date.slice(0, 4)))];
     if (!ys.includes(today.slice(0, 4))) ys.push(today.slice(0, 4));
-    return ys.sort().reverse().slice(0, 6);
+    return ys.sort().reverse().slice(0, 10);
   }, [data.records.paychecks, today]);
   const [year, setYear] = usePref('income.year', today.slice(0, 4));
   const y = years.includes(year) ? year : years[0];
@@ -24,8 +24,8 @@ function Paychecks() {
     [data.records.paychecks, y],
   );
   const sum = list.reduce(
-    (s, p) => ({ gross: s.gross + p.t.gross, taxes: s.taxes + p.t.taxes, retirement: s.retirement + p.t.retirement, benefits: s.benefits + p.t.benefits, net: s.net + p.t.net, bonus: s.bonus + (p.bonus || 0), match: s.match + p.t.match }),
-    { gross: 0, taxes: 0, retirement: 0, benefits: 0, net: 0, bonus: 0, match: 0 },
+    (s, p) => ({ gross: s.gross + p.t.gross, taxes: s.taxes + p.t.taxes, retirement: s.retirement + p.t.retirement, benefits: s.benefits + p.t.benefits, net: s.net + p.t.net, bonus: s.bonus + (p.bonus || 0), reimbursements: s.reimbursements + (p.reimbursements || 0), match: s.match + p.t.match }),
+    { gross: 0, taxes: 0, retirement: 0, benefits: 0, net: 0, bonus: 0, reimbursements: 0, match: 0 },
   );
   const other = otherIncome(data.records.activity, data.config.categories).filter((a) => a.date.startsWith(y));
   const otherTotal = other.reduce((s, a) => s + a.amount, 0);
@@ -49,13 +49,13 @@ function Paychecks() {
         <Stat label="Taxes" value={dollars(sum.taxes)} sub={sum.gross ? `${pct(sum.taxes / sum.gross)} of gross` : ''} />
         <Stat label="Retirement saved" value={dollars(sum.retirement)} sub={sum.match ? `+ ${dollars(sum.match)} employer match` : sum.gross ? `${pct(sum.retirement / sum.gross)} of gross` : ''} />
         <Stat label="Benefits" value={dollars(sum.benefits)} sub="Medical, dental, vision, other" />
-        <Stat label="Take-home pay" value={dollars(sum.net)} sub={sum.gross ? `${pct(sum.net / sum.gross)} of gross` : ''} />
+        <Stat label="Take-home pay" value={dollars(sum.net)} sub={sum.reimbursements ? `includes ${dollars(sum.reimbursements)} reimbursements` : sum.gross ? `${pct(sum.net / sum.gross)} of gross` : ''} />
         <Stat label="Other income" value={dollars(otherTotal)} sub={`${other.length} entr${other.length === 1 ? 'y' : 'ies'} from account activity`} />
       </div>
 
       <ChartCard
         title="Where each paycheck goes"
-        subtitle={`${y} · gross pay split into take-home, taxes, retirement and benefits`}
+        subtitle={`${y} · take-home includes reimbursements; gross pay excludes them`}
         legend={[
           { label: 'Take-home', color: 'var(--s1)' },
           { label: 'Taxes', color: 'var(--s2)' },
@@ -93,6 +93,7 @@ function Paychecks() {
                   <th>Date</th>
                   <th className="hide-mobile">Employer</th>
                   <th className="num">Gross</th>
+                  <th className="num hide-mobile">Reimb.</th>
                   <th className="num hide-mobile">Taxes</th>
                   <th className="num hide-mobile">Retirement</th>
                   <th className="num hide-mobile">Benefits</th>
@@ -111,13 +112,14 @@ function Paychecks() {
                       </td>
                       <td className="hide-mobile">{p.employer}</td>
                       <td className="num">{money(p.t.gross)}</td>
+                      <td className="num hide-mobile">{money(p.t.reimbursements)}</td>
                       <td className="num hide-mobile">{money(p.t.taxes)}</td>
                       <td className="num hide-mobile">{money(p.t.retirement)}</td>
                       <td className="num hide-mobile">{money(p.t.benefits)}</td>
                       <td className="num">
                         {money(p.t.net)}
                         {Math.abs(p.t.difference) >= 0.01 && (
-                          <div className="cell-sub warn" title="Net pay differs from gross minus deductions">
+                          <div className="cell-sub warn" title="Net pay differs from gross minus deductions plus reimbursements">
                             {money(p.t.difference)} unexplained
                           </div>
                         )}
@@ -130,6 +132,7 @@ function Paychecks() {
                   <td>Total</td>
                   <td className="hide-mobile" />
                   <td className="num">{money(sum.gross)}</td>
+                  <td className="num hide-mobile">{money(sum.reimbursements)}</td>
                   <td className="num hide-mobile">{money(sum.taxes)}</td>
                   <td className="num hide-mobile">{money(sum.retirement)}</td>
                   <td className="num hide-mobile">{money(sum.benefits)}</td>

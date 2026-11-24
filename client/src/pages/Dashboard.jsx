@@ -5,7 +5,7 @@ import { Card, Stat, Empty } from '../components/ui.jsx';
 import { ChartCard, TimeChart, BarsChart, Donut } from '../components/charts.jsx';
 import { computeCore, projectionInputs, netWorthProjection, endOfYearNetWorth, salaryNow, cashflowSeries, windowFor, ledger } from '../lib/metrics.js';
 import { averages, excludedCoreSet } from '../lib/spending.js';
-import { dollars, pct, signedDollars, money } from '../lib/format.js';
+import { dollars, pct, signedDollars, money, privacyText } from '../lib/format.js';
 import { monthLabel, monthLabelLong, formatDate, daysBetween } from '../lib/dates.js';
 import { ACCOUNT_GROUPS } from '@shared/accountTypes.js';
 
@@ -80,7 +80,7 @@ export default function Dashboard() {
 
   const prev = core.series.length >= 2 ? core.series[core.series.length - 2] : null;
   const nwDelta = prev ? t.netWorth - prev.netWorth : null;
-  const monthsOfCash = avg.spending.monthlyAll ? t.cash / avg.spending.monthlyAll : null;
+  const monthsOfCash = avg.spending.monthlyCore ? t.cash / avg.spending.monthlyCore : null;
 
   // Net worth roadmap: actual history, then projection (dashed) from today.
   const roadmap = useMemo(() => {
@@ -178,11 +178,11 @@ export default function Dashboard() {
           }
           onClick={() => (window.location.hash = '/balances')}
         />
-        <Stat label="Months of cash" value={monthsOfCash !== null ? monthsOfCash.toFixed(1) : '—'} sub={avg.spending.monthlyAll ? `Cash ÷ ${dollars(avg.spending.monthlyAll)}/mo spend` : 'Needs spending history'} />
+        <Stat label="Months of cash" value={monthsOfCash !== null ? monthsOfCash.toFixed(1) : '—'} sub={avg.spending.monthlyCore ? `Cash ÷ ${dollars(avg.spending.monthlyCore)}/mo core spend` : 'Needs core spending history'} />
         <Stat label={`Net worth, Dec 31 ${today.slice(0, 4)} (est.)`} value={dollars(eoy)} sub={`${signedDollars(eoy - t.netWorth)} from today`} />
         <Stat
           label="Salary vs investments"
-          value={salary.amount ? `${(t.investments / salary.amount).toFixed(1)}×` : '—'}
+          value={salary.amount ? privacyText(`${(t.investments / salary.amount).toFixed(1)}×`) : '—'}
           sub={salary.amount ? `Investments ÷ ${dollars(salary.amount)} ${salary.source === 'paychecks' ? 'pay (12 mo)' : 'salary'}` : 'Add salary on the Income page'}
         />
       </div>
